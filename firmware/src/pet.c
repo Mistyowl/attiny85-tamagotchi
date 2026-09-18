@@ -130,7 +130,10 @@ void pet_tick_life(Pet *p) {
   }
 
   if (p->health == 0) {
-    if (p->screen != SCR_DEAD) buzz_play(SFX_DIE);
+    if (p->screen != SCR_DEAD) {
+      buzz_play(SFX_DIE);
+      p->anim = 0;
+    }
     p->screen = SCR_DEAD;
     p->flags &= (uint8_t)~FLAG_SLEEPING;
     p->display_on = 1;
@@ -197,7 +200,12 @@ void pet_tick_game(Pet *p, uint8_t dt_ms) {
 
 void pet_tick_anim(Pet *p) {
   if (p->screen == SCR_GAME) return;
-  if (!p->display_on && p->screen != SCR_DEAD && p->screen != SCR_BOOT) return;
+  if (p->screen == SCR_DEAD) {
+    if (p->anim < 28) p->anim++;
+    if (p->feedback) p->feedback--;
+    return;
+  }
+  if (!p->display_on && p->screen != SCR_BOOT) return;
   p->anim ^= 1;
   if (p->feedback) p->feedback--;
 }

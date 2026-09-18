@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createNewPet, handleInput, tickLife, isAlive, buildRenderList } from "./pet";
+import { createNewPet, handleInput, tickLife, tickAnim, isAlive, buildRenderList } from "./pet";
 import { Button, Screen, Stage, FLAG_SICK, FLAG_DIRTY } from "./types";
+import { SPRITE_DEAD, SPRITE_WING_L, SPRITE_WING_R } from "./sprites";
 import { deserialize, serialize, SAVE_SIZE } from "./save";
 import { resolveAdultStage, tryRareEvent } from "./phase2";
 import { BitmapId } from "./icons";
@@ -91,6 +92,51 @@ describe("pet life", () => {
     pet.flags |= FLAG_DIRTY;
     const cmds = buildRenderList(pet);
     expect(cmds.some((c) => c.op === "bitmap" && c.id === BitmapId.Poop)).toBe(true);
+  });
+
+  it("dead render shows wings beside hamster and flies up", () => {
+    const pet = createNewPet();
+    pet.screen = Screen.Dead;
+    pet.stage = Stage.Baby;
+    pet.health = 0;
+    pet.animFrame = 0;
+    const start = buildRenderList(pet);
+    const startPet = start.find((c) => c.op === "sprite" && c.id === SPRITE_DEAD);
+    const startL = start.find((c) => c.op === "sprite" && c.id === SPRITE_WING_L);
+    const startR = start.find((c) => c.op === "sprite" && c.id === SPRITE_WING_R);
+    expect(startPet).toMatchObject({ op: "sprite", x: 48, y: 8 });
+    expect(startL).toMatchObject({ op: "sprite", x: 38, y: 24 });
+    expect(startR).toMatchObject({ op: "sprite", x: 58, y: 22 });
+    expect(start.some((c) => c.op === "text8")).toBe(false);
+
+    tickAnim(pet);
+    const next = buildRenderList(pet);
+    const nextPet = next.find((c) => c.op === "sprite" && c.id === SPRITE_DEAD);
+    expect(nextPet && nextPet.op === "sprite" ? nextPet.y : 0).toBe(6);
+    expect(next.some((c) => c.op === "sprite" && c.id === SPRITE_WING_L)).toBe(true);
+    expect(next.some((c) => c.op === "sprite" && c.id === SPRITE_WING_R)).toBe(true);
+
+    for (let i = 0; i < 40; i++) tickAnim(pet);
+    const gone = buildRenderList(pet);
+    expect(gone.some((c) => c.op === "sprite")).toBe(false);
+    expect(gone.some((c) => c.op === "text8" && c.text === "УВЫ")).toBe(true);
+  });
+
+  it("dead child keeps medium stage sprite", () => {
+    const pet = createNewPet();
+    pet.screen = Screen.Dead;
+    pet.stage = Stage.Child;
+    pet.health = 0;
+    pet.animFrame = 0;
+    const cmds = buildRenderList(pet);
+    expect(cmds.some((c) => c.op === "sprite" && c.id === Stage.Child)).toBe(true);
+    expect(cmds.some((c) => c.op === "sprite" && c.id === SPRITE_DEAD)).toBe(false);
+    expect(cmds.some((c) => c.op === "sprite" && c.id === SPRITE_WING_L && c.x === 38)).toBe(
+      true,
+    );
+    expect(cmds.some((c) => c.op === "sprite" && c.id === SPRITE_WING_R && c.x === 58)).toBe(
+      true,
+    );
   });
 
   it("hold select restarts after death", () => {

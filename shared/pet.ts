@@ -1,4 +1,5 @@
 import { IconId, BitmapId, POOP_X, POOP_Y } from "./icons";
+import { SPRITE_DEAD, SPRITE_H, SPRITE_WING_L, SPRITE_WING_R } from "./sprites";
 import {
   FLAG_DIRTY,
   FLAG_SICK,
@@ -38,14 +39,42 @@ import {
 import { queueSfx, Sfx } from "./sound";
 export { tickMinigame } from "./minigame";
 
+const DEATH_X = 48;
+const DEATH_START_Y = 8;
+const DEATH_FLY_PX = 2;
+const DEATH_ANIM_MAX = 28;
+const DEATH_WING_FLAP = 2;
+/** Push each wing outward so art sits beside the body, not over it. */
+const DEATH_WING_SIDE = 10;
+
+function deathSpriteY(pet: PetState): number {
+  return DEATH_START_Y - pet.animFrame * DEATH_FLY_PX;
+}
+
+/** Body sprite on death: special soul face for baby, otherwise the stage that died. */
+function deathBodyId(pet: PetState): number {
+  if (pet.stage === Stage.Baby) return SPRITE_DEAD;
+  return pet.stage;
+}
+
+/** Wing bitmap is top-aligned; baby soul body sits in the lower 16px. */
+function deathWingsYOffset(pet: PetState): number {
+  return pet.stage <= Stage.Baby ? 16 : 8;
+}
+
 /** Advance blink phase — call from UI clock (~ANIM_PERIOD_MS), not life WDT. */
 export function tickAnim(pet: PetState): void {
   if (pet.screen === Screen.Minigame) return;
+  if (pet.screen === Screen.Dead) {
+    if (pet.animFrame < DEATH_ANIM_MAX) pet.animFrame++;
+    if (pet.feedbackTicks > 0) pet.feedbackTicks--;
+    return;
+  }
   if (pet.screen === Screen.Sleeping || (pet.flags & FLAG_SLEEPING) !== 0) {
     if (pet.feedbackTicks > 0) pet.feedbackTicks--;
     return;
   }
-  if (!pet.displayOn && pet.screen !== Screen.Dead && pet.screen !== Screen.Boot) return;
+  if (!pet.displayOn && pet.screen !== Screen.Boot) return;
   pet.animFrame = (pet.animFrame + 1) % BLINK_CYCLE_TICKS;
   if (pet.feedbackTicks > 0) pet.feedbackTicks--;
 }
@@ -200,7 +229,10 @@ export function tickLife(pet: PetState): void {
 
   if (pet.health <= 0) {
     pet.health = 0;
-    if (pet.screen !== Screen.Dead) queueSfx(Sfx.Die);
+    if (pet.screen !== Screen.Dead) {
+      queueSfx(Sfx.Die);
+      pet.animFrame = 0;
+    }
     pet.screen = Screen.Dead;
     pet.flags &= ~FLAG_SLEEPING;
     pet.displayOn = true;
@@ -347,9 +379,32 @@ export function buildRenderList(pet: PetState): RenderCmd[] {
   }
 
   if (pet.screen === Screen.Dead) {
-    cmds.push({ op: "sprite", id: pet.stage, x: 48, y: 8, frame: petBlinkFrame(pet) });
-    cmds.push({ op: "text8", x: centerTextX("УВЫ"), y: 40, text: "УВЫ" });
-    cmds.push({ op: "text8", x: centerTextX("ЖМИ"), y: 52, text: "ЖМИ" });
+    const y = deathSpriteY(pet);
+    if (y + SPRITE_H > 0) {
+      const baseWingsY = y + deathWingsYOffset(pet);
+      const leftY = baseWingsY - (pet.animFrame & 1 ? DEATH_WING_FLAP : 0);
+      const rightY = baseWingsY - (pet.animFrame & 1 ? 0 : DEATH_WING_FLAP);
+      const bodyId = deathBodyId(pet);
+      cmds.push({
+        op: "sprite",
+        id: SPRITE_WING_L,
+        x: DEATH_X - DEATH_WING_SIDE,
+        y: leftY,
+        frame: 0,
+      });
+      cmds.push({
+        op: "sprite",
+        id: SPRITE_WING_R,
+        x: DEATH_X + DEATH_WING_SIDE,
+        y: rightY,
+        frame: 0,
+      });
+      cmds.push({ op: "sprite", id: bodyId, x: DEATH_X, y, frame: 0 });
+    }
+    if (y + SPRITE_H <= 8) {
+      cmds.push({ op: "text8", x: centerTextX("УВЫ"), y: 40, text: "УВЫ" });
+      cmds.push({ op: "text8", x: centerTextX("ЖМИ"), y: 52, text: "ЖМИ" });
+    }
     return cmds;
   }
 
