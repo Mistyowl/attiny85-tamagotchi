@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pocket Critter — ATtiny85 emulator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Silkscreen:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="mast">
+        <p class="mast__brand">Pocket Critter</p>
+        <p class="mast__sub">ATtiny85 · OLED 128×64 · web lab</p>
+      </header>
+
+      <main class="stage">
+        <div class="device" aria-label="Handheld pet emulator">
+          <div class="device__bezel">
+            <div class="device__screw device__screw--tl"></div>
+            <div class="device__screw device__screw--tr"></div>
+            <canvas id="oled" width="128" height="64" aria-label="OLED display"></canvas>
+            <div class="device__screw device__screw--bl"></div>
+            <div class="device__screw device__screw--br"></div>
+          </div>
+
+          <div class="device__keys" role="group" aria-label="Buttons">
+            <button type="button" class="key" data-btn="0" id="btn-left">◀</button>
+            <button type="button" class="key key--select" data-btn="1" id="btn-select">●</button>
+            <button type="button" class="key" data-btn="2" id="btn-right">▶</button>
+          </div>
+          <p class="device__hint">ПРЫГ: любая кнопка = прыжок · Skip to Baby → Play</p>
+        </div>
+
+        <aside class="lab" aria-label="Lab controls">
+          <label class="lab__row">
+            <span>Power</span>
+            <button type="button" id="power-toggle" class="lab__btn">ON</button>
+            <button type="button" id="keep-display" class="lab__btn">OLED auto-off</button>
+            <button type="button" id="buzzer-mute" class="lab__btn is-active">Buzzer ON</button>
+          </label>
+          <div class="lab__row lab__row--stack">
+            <span>Time scale</span>
+            <div class="scale-presets" role="group" aria-label="Time scale">
+              <button type="button" class="lab__btn scale-btn is-active" data-scale="1">1×</button>
+              <button type="button" class="lab__btn scale-btn" data-scale="10">10×</button>
+              <button type="button" class="lab__btn scale-btn" data-scale="60">60×</button>
+              <button type="button" class="lab__btn scale-btn" data-scale="300">5m</button>
+              <button type="button" class="lab__btn scale-btn" data-scale="3600">1h</button>
+            </div>
+            <label class="scale-custom">
+              <span class="scale-custom__label">Custom</span>
+              <input type="number" id="time-scale" min="1" max="86400" value="1" step="1" />
+              <span>×</span>
+            </label>
+          </div>
+          <div class="lab__row lab__row--stack">
+            <span>FPS</span>
+            <div class="scale-presets" role="group" aria-label="Frame rate mode">
+              <button type="button" class="lab__btn fps-btn is-active" data-fps="smooth">60 FPS</button>
+              <button type="button" class="lab__btn fps-btn" data-fps="device">Device</button>
+            </div>
+            <p class="lab__note" style="grid-column: 2; margin: 0.25rem 0 0">
+              Device ≈ 15 FPS (SoftI2C OLED) · 60 FPS — плавная отладка
+            </p>
+          </div>
+          <div class="lab__row lab__row--stack">
+            <span>Minigame</span>
+            <div class="scale-presets" role="group" aria-label="Minigame kind">
+              <button type="button" class="lab__btn mg-btn is-active" data-mg="-1">RAND</button>
+              <button type="button" class="lab__btn mg-btn" data-mg="0">ПОНГ</button>
+              <button type="button" class="lab__btn mg-btn" data-mg="1">БЛОК</button>
+              <button type="button" class="lab__btn mg-btn" data-mg="2">ПРЫГ</button>
+            </div>
+            <p class="lab__note" style="grid-column: 2; margin: 0.25rem 0 0">
+              RAND = случайная при Play · остальное — принудительно для теста
+            </p>
+            <div class="scale-presets" style="grid-column: 2" role="group" aria-label="Skip stage">
+              <button type="button" id="skip-baby" class="lab__btn">Skip маленький</button>
+              <button type="button" id="skip-child" class="lab__btn">Skip средний</button>
+              <button type="button" id="skip-adult" class="lab__btn">Skip большой</button>
+            </div>
+          </div>
+          <label class="lab__row">
+            <span>Battery out</span>
+            <button type="button" id="battery-pull" class="lab__btn">Pull CR2032</button>
+          </label>
+          <label class="lab__row">
+            <span>Save</span>
+            <button type="button" id="save-now" class="lab__btn">Write EEPROM</button>
+            <button type="button" id="reset-save" class="lab__btn">Wipe</button>
+          </label>
+
+          <dl class="lab__stats" id="debug">
+            <div><dt>Stage</dt><dd id="d-stage">—</dd></div>
+            <div><dt>Hunger</dt><dd id="d-hunger">—</dd></div>
+            <div><dt>Happy</dt><dd id="d-happy">—</dd></div>
+            <div><dt>Energy</dt><dd id="d-energy">—</dd></div>
+            <div><dt>Health</dt><dd id="d-health">—</dd></div>
+            <div><dt>Age ticks</dt><dd id="d-age">—</dd></div>
+            <div><dt>Care</dt><dd id="d-care">—</dd></div>
+            <div><dt>Save EEPROM</dt><dd id="d-save">17 B</dd></div>
+            <div><dt>Sprites</dt><dd id="d-flash-sprites">—</dd></div>
+            <div><dt>Icons</dt><dd id="d-flash-icons">—</dd></div>
+            <div><dt>Font</dt><dd id="d-flash-font">—</dd></div>
+            <div><dt>Assets Σ</dt><dd id="d-flash-total">—</dd></div>
+            <div><dt>AVR code</dt><dd id="d-flash-avr">not measured</dd></div>
+            <div><dt>Free est.</dt><dd id="d-flash-free">—</dd></div>
+            <div><dt>FPS mode</dt><dd id="d-fps">60</dd></div>
+            <div><dt>Est. days</dt><dd id="d-days">—</dd></div>
+            <div><dt>mAh used</dt><dd id="d-mah">—</dd></div>
+          </dl>
+          <p class="lab__note" id="flash-note">
+            Flash assets from TS PROGMEM estimates. OLED+game code needs
+            <code>avr-size</code> after firmware build — not measured yet.
+          </p>
+          <pre class="lab__log" id="log" aria-live="polite"></pre>
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
