@@ -3,11 +3,18 @@
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <avr/pgmspace.h>
 #include <util/delay_basic.h>
 
 /*
  * Passive piezo: PIN_BUZZER → ~150Ω → piezo → GND.
  * Shares PB1 with Left button (restored to INPUT_PULLUP after beep).
+ *
+ * Each SFX is PROGMEM uint16 pairs, terminated by {0,0}:
+ *   half!=0 → square wave: `cycles` toggles, half-period = half µs
+ *   half==0, ms!=0 → silence for `ms` milliseconds
+ *
+ * half = 500000/freq (trunc), cycles = (ms*1000)/(half*2) — same as old tone_ms.
  */
 
 /** Busy-wait µs @ 8 MHz (approx). */
@@ -19,16 +26,9 @@ static void wait_us(uint16_t us) {
   if (us) _delay_loop_2((uint16_t)(us * 2));
 }
 
-static void tone_ms(uint16_t freq, uint8_t ms) {
-  if (freq == 0) {
-    wait_us((uint16_t)ms * 1000);
-    return;
-  }
-  uint16_t half = (uint16_t)(500000UL / freq);
+static void play_tone(uint16_t half, uint16_t cycles) {
   if (half < 40) half = 40;
-  uint16_t cycles = (uint16_t)(((uint32_t)ms * 1000UL) / ((uint32_t)half * 2UL));
   if (cycles == 0) cycles = 1;
-
   DDRB |= (1 << PIN_BUZZER);
   while (cycles--) {
     PORTB |= (1 << PIN_BUZZER);
@@ -47,84 +47,44 @@ void buzz_init(void) {
   restore_btn_pin();
 }
 
+/* {half_us, cycles} or {0, silence_ms}; end {0,0} */
+static const uint16_t sfx_click[] PROGMEM = {277, 32, 0, 0};
+static const uint16_t sfx_feed[] PROGMEM = {555, 45, 0, 20, 357, 98, 0, 0};
+static const uint16_t sfx_play[] PROGMEM = {416, 48, 312, 64, 250, 120, 0, 0};
+static const uint16_t sfx_sleep[] PROGMEM = {625, 64, 833, 60, 1250, 48, 0, 0};
+static const uint16_t sfx_medicine[] PROGMEM = {333, 60, 0, 30, 333, 60, 0, 30, 263, 152, 0, 0};
+static const uint16_t sfx_hatch[] PROGMEM = {500, 60, 384, 78, 294, 102, 227, 220, 0, 0};
+static const uint16_t sfx_evolve[] PROGMEM = {454, 55, 357, 70, 277, 90, 227, 110, 277, 144, 0, 0};
+static const uint16_t sfx_chirp[] PROGMEM = {208, 84, 0, 40, 178, 126, 0, 0};
+static const uint16_t sfx_sad[] PROGMEM = {555, 81, 714, 77, 0, 0};
+static const uint16_t sfx_die[] PROGMEM = {833, 60, 1111, 54, 1666, 48, 0, 0};
+static const uint16_t sfx_wake[] PROGMEM = {357, 56, 277, 90, 0, 0};
+/* SFX_HIT / SFX_FART: emulator-only — not linked on device */
+
+static const uint16_t *const sfx_table[] PROGMEM = {
+    0,
+    sfx_click, sfx_feed, sfx_play, sfx_sleep, sfx_medicine,
+    sfx_hatch, sfx_evolve, sfx_chirp, sfx_sad, sfx_die,
+    sfx_wake};
+
 void buzz_play(uint8_t sfx_id) {
-  if (sfx_id == SFX_NONE) return;
+  if (sfx_id == SFX_NONE || sfx_id > SFX_WAKE) return;
+
+  const uint16_t *seq = (const uint16_t *)pgm_read_ptr(&sfx_table[sfx_id]);
+  if (!seq) return;
 
   uint8_t sreg = SREG;
   cli();
 
-  switch (sfx_id) {
-    case SFX_CLICK:
-      tone_ms(1800, 18);
-      break;
-    case SFX_FEED:
-      tone_ms(900, 50);
-      tone_ms(0, 20);
-      tone_ms(1400, 70);
-      break;
-    case SFX_PLAY:
-      tone_ms(1200, 40);
-      tone_ms(1600, 40);
-      tone_ms(2000, 60);
-      break;
-    case SFX_SLEEP:
-      tone_ms(800, 80);
-      tone_ms(600, 100);
-      tone_ms(400, 120);
-      break;
-    case SFX_MEDICINE:
-      tone_ms(1500, 40);
-      tone_ms(0, 30);
-      tone_ms(1500, 40);
-      tone_ms(0, 30);
-      tone_ms(1900, 80);
-      break;
-    case SFX_HATCH:
-      tone_ms(1000, 60);
-      tone_ms(1300, 60);
-      tone_ms(1700, 60);
-      tone_ms(2200, 100);
-      break;
-    case SFX_EVOLVE:
-      tone_ms(1100, 50);
-      tone_ms(1400, 50);
-      tone_ms(1800, 50);
-      tone_ms(2200, 50);
-      tone_ms(1800, 80);
-      break;
-    case SFX_CHIRP:
-      tone_ms(2400, 35);
-      tone_ms(0, 40);
-      tone_ms(2800, 45);
-      break;
-    case SFX_SAD:
-      tone_ms(900, 90);
-      tone_ms(700, 110);
-      break;
-    case SFX_DIE:
-      tone_ms(600, 100);
-      tone_ms(450, 120);
-      tone_ms(300, 160);
-      break;
-    case SFX_WAKE:
-      tone_ms(1400, 40);
-      tone_ms(1800, 50);
-      break;
-    case SFX_HIT:
-      tone_ms(2000, 25);
-      break;
-    case SFX_FART:
-      tone_ms(220, 28);
-      tone_ms(0, 12);
-      tone_ms(170, 32);
-      tone_ms(0, 12);
-      tone_ms(130, 40);
-      tone_ms(0, 14);
-      tone_ms(95, 55);
-      tone_ms(70, 90);
-      break;
-    default:
-      break;
+  for (;;) {
+    uint16_t a = pgm_read_word(&seq[0]);
+    uint16_t b = pgm_read_word(&seq[1]);
+    if (a == 0 && b == 0) break;
+    if (a == 0)
+      wait_us((uint16_t)(b * 1000u));
+    else
+      play_tone(a, b);
+    seq += 2;
   }
 
   restore_btn_pin();

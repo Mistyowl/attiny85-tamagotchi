@@ -21,16 +21,21 @@ make size
 
 ## Замер (текущий)
 
-После `make size` (Os, без Arduino core, 2026-09-17):
+После `make size` (Os + `-mcall-prologues` + `-Wl,--relax`, без Arduino core, 2026-09-20):
 
 | | Байты | Из 8192 / 512 |
 |--|------:|---------------|
-| **Flash (text)** | **4846** | ~59% |
-| **RAM (bss)** | **168** | ~33% |
+| **Flash (text)** | **6518** | ~80% |
+| **RAM (bss)** | **171** | ~33% |
 
-Свободно ~**3.3 КБ** Flash. Сюда спокойно влезают полноценные спрайты 32×32 (~1.5 КБ) и ещё запас на полировку.
+Свободно ~**1674 B** Flash. Спрайты 32×32 из `shared/sprites.ts` в `sprites.c` (XY-crop пустых строк и столбцов).
 
-Сейчас в `ui.c` — заглушка `pet16` (крошечный пет), не `shared/sprites.ts`.
+Перегенерация арта после правок в TS:
+
+```bash
+node scripts/export-sprites.mjs
+make -C firmware size
+```
 
 ## Состав
 
@@ -41,14 +46,31 @@ make size
 | `src/game.c` | ПОНГ / БЛОК / ПРЫГ |
 | `src/oled.c` | SoftI2C + SSD1306 page mode |
 | `src/ui.c` | отрисовка по страницам (128 Б буфер) |
+| `src/sprites.c` | PROGMEM 32×32 из `shared/sprites.ts` |
 | `src/save.c` | EEPROM 17 Б + CRC |
 
-## Заливка (позже)
+## Заливка
 
-```text
-avrdude -c usbtiny -p t85 -U flash:w:build/zhorik.hex:i
+**Без Micronucleus** — только ISP, иначе Flash не хватит под текущий бинарник (~6518 B).
+
+```bash
+cd firmware
+make hex
 ```
 
-(программатор USBTiny / USBasp / Arduino as ISP — под ваш кабель.)
+Примеры `avrdude` (подставьте свой программатор / COM):
+
+```text
+# USBasp
+avrdude -c usbasp -p t85 -U flash:w:build/zhorik.hex:i
+
+# USBTiny
+avrdude -c usbtiny -p t85 -U flash:w:build/zhorik.hex:i
+
+# Arduino Uno as ISP (сначала залить скетч ArduinoISP на Uno; COM — ваш порт)
+avrdude -c arduino -P COM3 -b 19200 -p t85 -U flash:w:build/zhorik.hex:i
+```
+
+Плата «ATTINY Programming Board» с Micro-USB — сокет/обвязка; прошивка через её USB (Digispark) не используется.
 
 PCINT для пробуждения по кнопке ещё не включён — для size-сборки не нужен.

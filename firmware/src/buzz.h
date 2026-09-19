@@ -18,8 +18,8 @@ enum {
   SFX_SAD = 9,
   SFX_DIE = 10,
   SFX_WAKE = 11,
-  SFX_HIT = 12,
-  SFX_FART = 13
+  SFX_HIT = 12,  /* emulator only */
+  SFX_FART = 13  /* emulator only */
 };
 
 void buzz_init(void);

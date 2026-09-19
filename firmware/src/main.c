@@ -104,8 +104,16 @@ int main(void) {
 
     if (wdt_fired) {
       wdt_fired = 0;
+      uint32_t age_before = pet.age_ticks;
       pet_tick_life(&pet);
-      if ((pet.age_ticks % 50) == 0 && pet.age_ticks) save_write(&pet);
+      /* every 50 life ticks — avoid age_ticks % 50 (__udivmodsi4) */
+      if (pet.age_ticks != age_before) {
+        static uint8_t save_cd;
+        if (++save_cd >= 50) {
+          save_cd = 0;
+          save_write(&pet);
+        }
+      }
     }
 
     /* OLED on: blink ~650ms, stay awake for UI */

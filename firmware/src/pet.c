@@ -1,6 +1,7 @@
 #include "pet.h"
 #include "game.h"
 #include "buzz.h"
+#include <string.h>
 
 #define STAGE_EGG   30
 #define STAGE_BABY  180
@@ -15,34 +16,20 @@ uint8_t pet_clamp(int16_t v) {
 }
 
 void pet_reset(Pet *p) {
-  p->stage = ST_EGG;
+  memset(p, 0, sizeof(*p));
   p->hunger = 20;
   p->happiness = 80;
   p->energy = 90;
   p->health = 100;
-  p->flags = 0;
-  p->age_ticks = 0;
   p->care = 50;
   p->screen = SCR_BOOT;
-  p->menu = 0;
-  p->anim = 0;
   p->boot_ticks = 2;
   p->display_on = 1;
-  p->hold_sel = 0;
-  p->feedback = 0;
-  p->mg_kind = 0;
-  p->mg_phase = 0;
-  p->mg_hits = 0;
-  p->mg_miss = 0;
-  p->mg_flash = 0;
   p->mg_seed = 1;
   p->paddle = 52;
   p->ball_x = 64;
   p->ball_y = 40;
-  p->ball_dx = 0;
-  p->ball_dy = 0;
   p->bricks = 0xFF;
-  p->btn_held = 0;
   p->ai_pad = 52;
 }
 
@@ -64,11 +51,13 @@ static void apply_action(Pet *p) {
       buzz_play(SFX_FEED);
       break;
     case 1: /* play → random minigame (0 pong / 1 ark / 2 runner) */ {
-      uint16_t s = p->mg_seed ? p->mg_seed : 1;
-      s = (uint16_t)(s * 1103515245u + 12345u);
+      uint16_t s = game_rnd(p);
       s ^= (uint16_t)(p->age_ticks ^ (p->care << 2));
       p->mg_seed = s ? s : 1;
-      game_start(p, (uint8_t)(s % 3));
+      /* avoid libgcc % : (s&3)==3 → 0 (slight bias to pong) */
+      uint8_t kind = (uint8_t)(s & 3);
+      if (kind > 2) kind = 0;
+      game_start(p, kind);
       buzz_play(SFX_PLAY);
       break;
     }
@@ -138,10 +127,20 @@ void pet_tick_life(Pet *p) {
     p->flags &= (uint8_t)~FLAG_SLEEPING;
     p->display_on = 1;
   } else if (p->display_on && p->screen == SCR_HOME && p->stage != ST_EGG) {
-    if (p->happiness >= 50 && p->health > 30 && (p->age_ticks % 28) == 0)
-      buzz_play(SFX_CHIRP);
-    else if ((p->hunger >= 85 || p->happiness <= 20) && (p->age_ticks % 36) == 0)
-      buzz_play(SFX_SAD);
+    /* uint8 counters — avoid age_ticks % N (pulls __udivmodsi4) */
+    static uint8_t chirp_cd, sad_cd;
+    uint8_t played = 0;
+    if (++chirp_cd >= 28) {
+      chirp_cd = 0;
+      if (p->happiness >= 50 && p->health > 30) {
+        buzz_play(SFX_CHIRP);
+        played = 1;
+      }
+    }
+    if (++sad_cd >= 36) {
+      sad_cd = 0;
+      if (!played && (p->hunger >= 85 || p->happiness <= 20)) buzz_play(SFX_SAD);
+    }
   }
 }
 
@@ -185,10 +184,12 @@ void pet_input(Pet *p, uint8_t btn, uint8_t pressed) {
     uint8_t n = menu_count(p);
     if (p->menu >= n) p->menu = 0;
     if (btn == BTN_LEFT) {
-      p->menu = (uint8_t)((p->menu + n - 1) % n);
+      if (p->menu == 0) p->menu = (uint8_t)(n - 1);
+      else p->menu--;
       buzz_play(SFX_CLICK);
     } else if (btn == BTN_RIGHT) {
-      p->menu = (uint8_t)((p->menu + 1) % n);
+      p->menu++;
+      if (p->menu >= n) p->menu = 0;
       buzz_play(SFX_CLICK);
     } else if (btn == BTN_SEL) apply_action(p);
   }

@@ -23,53 +23,43 @@ Buzzer shares Left (`PIN_BUZZER`): while beeping the pin is driven as OUTPUT squ
 | SRAM | **512 B** | State ~40 B + OLED page 128 B + stack — no full 1 KB framebuffer |
 | EEPROM | **512 B** | Save blob **17 B** + CRC; ~495 B free for scores/settings |
 
-ISP without bootloader = full 8 KB. Micronucleus (Digispark USB) costs **~1.5–2 KB** Flash up front.
+ISP without bootloader = full 8 KB.
 
-### Assets now (PROGMEM estimate from TS)
+**Decision: no Micronucleus / Digispark USB bootloader.** It costs ~1.5–2 KB Flash; current firmware (~6518 B) would not fit. Flash only via ISP (USBasp, USBtiny, or Arduino as ISP) for the full 8192 B.
 
-Measured by `estimateSpriteFlashBytes` / `estimateIconFlashBytes` / `estimateFontFlashBytes` in `shared/`.
 
-| Block | Calc | Bytes |
-|-------|------|-------|
-| Sprites | 6 stages × 2 frames × 128 | **1536** |
-| Icons | 12 × 8 | **96** |
-| Font | ~25 glyphs × 5 | **~125** |
-| **Assets total** | | **~1757 (~1.7 KB)** |
+### Measured firmware size (2026-09-20)
 
-AVR game + OLED code is **measured** (bare `avr-gcc -Os`, see `firmware/`):
+`make -C firmware size` (`-Os -mcall-prologues -Wl,--relax`, no bootloader):
 
-| | Bytes | Limit | Used |
-|--|------:|------:|-----:|
-| Flash (`text`) | **4846** | 8192 | **59%** |
-| SRAM (`bss`) | **168** | 512 | **33%** |
+| | Bytes | Limit | Used | Free |
+|--|------:|------:|-----:|-----:|
+| Flash (`text`) | **6518** | 8192 | **~80%** | **~1674 B (~1.6 KB)** |
+| SRAM (`bss`) | **171** | 512 | **~33%** | **~341 B** (+ stack) |
 
-Free Flash ≈ **3346 B** (~3.3 KB). Rebuild: `make -C firmware size`.
+Full 32×32 sprites are in firmware (`sprites.c`, XY-cropped empty rows/cols). Rebuild: `make -C firmware size`. Details: [`memory-optimization.md`](memory-optimization.md), [`firmware/README.md`](../firmware/README.md).
 
-Note: firmware still draws a **tiny stub pet** (`pet16`, 2×32 B), not the full 32×32 set from `shared/sprites.ts` (that set alone is **1536 B**).
+### Assets (TS estimates vs linked)
 
-### Free estimate (phase-1 stack, no bootloader)
+| Block | Notes | Approx |
+|-------|-------|-------:|
+| Pet sprites (XY-cropped PROGMEM) | unique frames in `sprites.c` | **~756 B** data |
+| Icons / font | mostly emulator UI; firmware digits-only font ~50 B | small on device |
+| Games + OLED + buzz + logic | rest of `.text` | — |
 
-| Piece | Rough Flash |
-|-------|-------------|
-| SoftI2C + OLED + draw + games (linked now) | **~4846** (measured) |
-| Full 32×32 sprites (6×2×128) if linked | **+~1.5 KB** (replacing stub) |
-| **After full sprites** | **~6.3 KB / 8 KB** |
-| **Likely free then** | **~1.5–1.9 KB** |
+Target: keep **≥1 KB** free Flash for polish / rare events — **currently ~1.6 KB**.
 
-Target: keep **≥1 KB** free after real sprites for polish / rare events.
+### What still fits in ~1.6 KB free
 
-### What still fits in ~3.3 KB free (now) / ~1.5 KB after sprites
-
-| Feature | Est. Flash | Fits now? | After full sprites? |
-|---------|------------|-----------|---------------------|
-| Full 32×32 pet sprites (6 stages × 2 frames) | ~1.5 KB | Yes | — |
-| Better Cyrillic UI (already mostly in) | small | Yes | Yes |
-| Rare events (guest / storm) | 100–300 B | Yes | Yes |
-| +1–2 animation frames per stage | 128 B / frame | Yes | Sparingly |
-| Extra adult branch art | 256–512 B | Yes | Tight |
-| 4th minigame | 400–800 B | Yes | Maybe |
-| Sound / inventory / long dialogue | 1+ KB | Risky | No |
-| Micronucleus USB bootloader | 1.5–2 KB | Cuts free hard | Avoid if possible |
+| Feature | Est. Flash | Fits? |
+|---------|------------|------:|
+| Rare events (guest / storm) | 100–300 B | Yes |
+| +1 animation frame | ~48–128 B / frame (after crop) | Sparingly |
+| Extra adult branch art | 256–512 B | Yes if careful |
+| Cyrillic UI / icons | ~150–250 | Maybe |
+| 4th minigame | 400–800 B | Risky |
+| Sound / inventory / long dialogue | 1+ KB | Tight |
+| Micronucleus USB bootloader | 1.5–2 KB | **No — do not use** |
 
 RAM: after 128 B OLED page, ~300+ B left — OK for current games, not a second framebuffer.
 EEPROM: 17 B save used, ~495 B free.
@@ -145,14 +135,13 @@ Menu actions (cursor Left/Right, Select confirm): Feed, Play, Sleep, Medicine (w
 
 | Feature | Phase | Est. Flash impact |
 |---------|-------|-------------------|
-| Core tick + menu | 0 | baseline (in game logic) |
-| Sprites 6×2×128 | 1 | **1536 B** (current) |
-| Icons + font | 1 | **~221 B** (current) |
-| Sick/dirty | 1 | small (flags) |
-| One minigame | 2 | 200–600 B |
-| Evolution AdultA/B | 2 | already in sprites; logic small |
+| Core + OLED + 3 games + buzz | 0–1 | in measured **6518 B** total |
+| Sprites (XY-cropped PROGMEM) | 1 | **~756 B** data (linked) |
+| Digits font on device | 1 | ~50 B |
+| Icons / Cyrillic | emulator-heavy | not fully on device yet |
+| Evolution AdultA/B art | 2 | same Adult pointers until unique |
 | Rare events | 2 | 100–300 B |
-| Extra sprite frames | 2 | 128 B / frame |
+| Extra sprite frames | 2 | ~48–128 B / frame (cropped) |
 
 ## UI language
 

@@ -7,5 +7,6 @@
 void game_start(Pet *p, uint8_t kind);
 void game_tick(Pet *p, uint8_t dt_ms);
 void game_input(Pet *p, uint8_t btn);
+uint16_t game_rnd(Pet *p);
 
 #endif

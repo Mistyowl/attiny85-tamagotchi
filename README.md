@@ -9,7 +9,7 @@ cd firmware
 make          # compile + avr-size (no upload)
 ```
 
-Current size: **Flash ~4240 B / 8192**, **RAM ~166 B / 512**. See [`firmware/README.md`](firmware/README.md).
+Current size: **Flash 6926 / 8192** (~1266 B free), **RAM 168 / 512**. See [`firmware/README.md`](firmware/README.md).
 
 Open the URL Vite prints (default http://localhost:5173).
 

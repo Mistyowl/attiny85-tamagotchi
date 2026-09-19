@@ -3,10 +3,14 @@
  */
 #include "ui.h"
 #include "oled.h"
+#include "sprites.h"
+#include "pet.h"
 #include <avr/pgmspace.h>
 #include <string.h>
 
 #define PADDLE_W_UI 24
+#define PET_X 48
+#define DEATH_WING_SIDE 10
 
 static uint8_t page[128];
 
@@ -47,48 +51,41 @@ static void page_glyph(uint8_t x, char ch) {
 }
 
 static void page_num(uint8_t x, uint8_t v) {
-  page_glyph(x, (char)('0' + (v / 100) % 10));
-  page_glyph((uint8_t)(x + 6), (char)('0' + (v / 10) % 10));
-  page_glyph((uint8_t)(x + 12), (char)('0' + v % 10));
+  /* v ≤ 100 — subtract instead of / % (avoids libgcc div) */
+  uint8_t h = 0, t = 0;
+  if (v >= 100) {
+    h = 1;
+    v = (uint8_t)(v - 100);
+  }
+  while (v >= 10) {
+    v = (uint8_t)(v - 10);
+    t++;
+  }
+  page_glyph(x, (char)('0' + h));
+  page_glyph((uint8_t)(x + 6), (char)('0' + t));
+  page_glyph((uint8_t)(x + 12), (char)('0' + v));
 }
 
-static const uint8_t pet16[2][32] PROGMEM = {
-    {0x00, 0x00, 0x03, 0x0F, 0x1F, 0x3F, 0x3F, 0x7F, 0x7F, 0x7F, 0x3F, 0x3F, 0x1F,
-     0x0F, 0x03, 0x00, 0x00, 0x00, 0xC0, 0xF0, 0xF8, 0xFC, 0xFC, 0xFE, 0xFE, 0xFE,
-     0xFC, 0xFC, 0xF8, 0xF0, 0xC0, 0x00},
-    {0x00, 0x00, 0x07, 0x1F, 0x3F, 0x3F, 0x7F, 0x7F, 0x7F, 0x7F, 0x3F, 0x3F, 0x1F,
-     0x07, 0x00, 0x00, 0x00, 0x00, 0xE0, 0xF8, 0xFC, 0xFC, 0xFE, 0xFE, 0xFE, 0xFE,
-     0xFC, 0xFC, 0xF8, 0xE0, 0x00, 0x00}};
-
-/* Wing art = top 16 rows only (row-major 32-wide). */
-static const uint8_t wingL16[64] PROGMEM = {
-    0x38, 0x00, 0x00, 0x00, 0x26, 0x00, 0x00, 0x00, 0x21, 0x80, 0x00, 0x00, 0x20, 0x60, 0x00, 0x00,
-    0x70, 0x10, 0x00, 0x00, 0x4e, 0x08, 0x00, 0x00, 0x40, 0x04, 0x00, 0x00, 0x40, 0x04, 0x00, 0x00,
-    0x20, 0xe2, 0x00, 0x00, 0x19, 0x12, 0x00, 0x00, 0x22, 0x12, 0x00, 0x00, 0x12, 0x22, 0x00, 0x00,
-    0x0e, 0x04, 0x00, 0x00, 0x01, 0x08, 0x00, 0x00, 0x00, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-static const uint8_t wingR16[64] PROGMEM = {
-    0x00, 0x00, 0x00, 0x38, 0x00, 0x00, 0x00, 0xc8, 0x00, 0x00, 0x03, 0x08, 0x00, 0x00, 0x0c, 0x08,
-    0x00, 0x00, 0x10, 0x1c, 0x00, 0x00, 0x20, 0xe4, 0x00, 0x00, 0x40, 0x04, 0x00, 0x00, 0x40, 0x04,
-    0x00, 0x00, 0x8e, 0x08, 0x00, 0x00, 0x91, 0x30, 0x00, 0x00, 0x90, 0x88, 0x00, 0x00, 0x88, 0x90,
-    0x00, 0x00, 0x40, 0xe0, 0x00, 0x00, 0x21, 0x00, 0x00, 0x00, 0x1e, 0x00, 0x00, 0x00, 0x00, 0x00};
-static const uint8_t dead16[64] PROGMEM = {
-    0x00, 0x60, 0x0c, 0x00, 0x00, 0x90, 0x12, 0x00, 0x01, 0x0f, 0xe1, 0x00, 0x01, 0x20, 0x09, 0x00,
-    0x00, 0x90, 0x12, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x08, 0x21, 0x00,
-    0x00, 0x80, 0x02, 0x00, 0x00, 0x80, 0x02, 0x00, 0x01, 0x02, 0x81, 0x00, 0x01, 0x01, 0xc1, 0x00,
-    0x01, 0x10, 0xd1, 0x00, 0x00, 0xe0, 0x0e, 0x00, 0x00, 0x4f, 0xe4, 0x00, 0x00, 0x30, 0x18, 0x00};
-
-static void page_bm32(uint8_t pg, int16_t x, int16_t y, uint8_t h, const uint8_t *bm) {
-  for (uint8_t sy = 0; sy < h; sy++) {
+/** XY-cropped PROGMEM bitmap → current OLED page. */
+static void page_bm(uint8_t pg, int16_t x, int16_t y, const SpriteDesc *s) {
+  const uint8_t stride = (uint8_t)(s->w >> 3);
+  x = (int16_t)(x + s->x0);
+  for (uint8_t sy = 0; sy < s->h; sy++) {
     int16_t yy = (int16_t)(y + sy);
     if (yy < 0) continue;
     if (yy >= 64) break;
     if ((uint8_t)(yy >> 3) != pg) continue;
     uint8_t bit = (uint8_t)(1u << (yy & 7));
-    for (uint8_t sx = 0; sx < 32; sx++) {
-      int16_t xx = (int16_t)(x + sx);
-      if ((uint16_t)xx >= 128) continue;
-      uint8_t b = pgm_read_byte(&bm[(uint16_t)sy * 4 + (sx >> 3)]);
-      if (b & (uint8_t)(0x80u >> (sx & 7))) page[(uint8_t)xx] |= bit;
+    const uint8_t *row = &s->bits[(uint16_t)sy * stride];
+    for (uint8_t col = 0; col < stride; col++) {
+      uint8_t b = pgm_read_byte(&row[col]);
+      if (!b) continue;
+      int16_t xx = (int16_t)(x + (col << 3));
+      for (uint8_t bx = 0; bx < 8; bx++) {
+        if (!(b & (uint8_t)(0x80u >> bx))) continue;
+        int16_t px = (int16_t)(xx + bx);
+        if ((uint16_t)px < 128) page[(uint8_t)px] |= bit;
+      }
     }
   }
 }
@@ -106,16 +103,21 @@ void ui_draw(const Pet *p) {
     if (p->screen == SCR_BOOT && pg == 3) {
       page_fill(34, 2, 60, 4);
     } else if (p->screen == SCR_DEAD) {
-      /* 2 px / anim tick (~500ms) — slower ascent */
+      /* Match shared/: y = 8 - anim*2; baby uses soul face + wings at +16 */
       int16_t y = (int16_t)(8 - (int16_t)p->anim * 2);
       if (y > -32) {
-        int16_t base = (int16_t)(y + 16);
-        int16_t ly = (int16_t)(base - ((p->anim & 1) ? 2 : 0));
-        int16_t ry = (int16_t)(base - ((p->anim & 1) ? 0 : 2));
-        /* ±10 px so wings sit beside body (OR-blend would fill over the face). */
-        page_bm32(pg, 38, ly, 16, wingL16);
-        page_bm32(pg, 58, ry, 16, wingR16);
-        page_bm32(pg, 48, (int16_t)(y + 16), 16, dead16);
+        uint8_t baby = (p->stage == ST_BABY);
+        int16_t wing_base = (int16_t)(y + (baby ? 16 : 8));
+        int16_t ly = (int16_t)(wing_base - ((p->anim & 1) ? 2 : 0));
+        int16_t ry = (int16_t)(wing_base - ((p->anim & 1) ? 0 : 2));
+        SpriteDesc body, wl, wr;
+        if (baby) sprite_dead(&body);
+        else sprite_stage(p->stage, 0, &body);
+        sprite_wing_l(&wl);
+        sprite_wing_r(&wr);
+        page_bm(pg, PET_X - DEATH_WING_SIDE, (int16_t)(ly + wl.y0), &wl);
+        page_bm(pg, PET_X + DEATH_WING_SIDE, (int16_t)(ry + wr.y0), &wr);
+        page_bm(pg, PET_X, (int16_t)(y + body.y0), &body);
       } else if (pg == 5) {
         page_num(50, 0);
       }
@@ -136,7 +138,7 @@ void ui_draw(const Pet *p) {
         }
         if (pg == 1 && p->mg_kind == 0) page_fill(p->ai_pad, 4, PADDLE_W_UI, 3);
         if (pg == 7) page_fill(p->paddle, 0, PADDLE_W_UI, 3);
-        if (pg == (uint8_t)(p->ball_y / 8))
+        if (p->ball_y >= 0 && pg == (uint8_t)((uint16_t)p->ball_y >> 3))
           page_fill((uint8_t)p->ball_x, (uint8_t)(p->ball_y & 7), 3, 3);
       }
     } else if (p->screen == SCR_HOME || p->screen == SCR_SLEEP) {
@@ -148,13 +150,20 @@ void ui_draw(const Pet *p) {
         page_num(10, p->energy);
         page_num(70, p->health);
       }
-      if (pg == 2 || pg == 3) {
-        uint8_t fr = p->anim & 1;
-        for (uint8_t i = 0; i < 16; i++) {
-          uint8_t b = pgm_read_byte(&pet16[fr][i + (pg == 3 ? 16 : 0)]);
-          page[48 + i] = b;
-        }
+
+      {
+        int16_t pet_y = (p->feedback && p->screen == SCR_HOME) ? 6 : 8;
+        if (p->screen == SCR_SLEEP) pet_y = 10;
+        uint8_t fr;
+        if (p->screen == SCR_SLEEP)
+          fr = (p->stage == ST_EGG) ? 0 : 1; /* closed eyes while asleep */
+        else
+          fr = p->anim & 1;
+        SpriteDesc spr;
+        sprite_stage(p->stage, fr, &spr);
+        page_bm(pg, PET_X, (int16_t)(pet_y + spr.y0), &spr);
       }
+
       if (pg == 7) {
         for (uint8_t i = 0; i < 4; i++) {
           uint8_t x = (uint8_t)(20 + i * 28);

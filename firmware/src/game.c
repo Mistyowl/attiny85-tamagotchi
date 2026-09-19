@@ -9,7 +9,7 @@
 #define PHASE_PLAY  1
 #define PHASE_PAUSE 2
 
-static uint16_t rnd(Pet *p) {
+uint16_t game_rnd(Pet *p) {
   uint16_t s = p->mg_seed ? p->mg_seed : 1;
   s = (uint16_t)(s * 1103515245u + 12345u);
   p->mg_seed = s;
@@ -22,23 +22,15 @@ static void finish(Pet *p) {
   else happy = (uint8_t)(6 + (p->mg_hits > 10 ? 10 : p->mg_hits));
   p->happiness = pet_clamp((int16_t)p->happiness + happy);
   p->energy = pet_clamp((int16_t)p->energy - 6 - p->mg_miss * 2);
-  p->care += 1 + p->mg_hits / 2;
+  p->care += 1 + (p->mg_hits >> 1);
   p->screen = SCR_HOME;
   p->feedback = 4;
-}
-
-static void reset_ball(Pet *p) {
-  p->ball_x = p->paddle + PADDLE_W / 2;
-  p->ball_y = PADDLE_Y - 6;
-  p->ball_dx = 0;
-  p->ball_dy = 0;
-  p->mg_phase = PHASE_READY;
 }
 
 static void serve_pong(Pet *p) {
   p->ball_x = p->paddle + PADDLE_W / 2;
   p->ball_y = PADDLE_Y - 8;
-  p->ball_dx = (rnd(p) & 1) ? 1 : -1;
+  p->ball_dx = (game_rnd(p) & 1) ? 1 : -1;
   p->ball_dy = -1;
   p->mg_phase = PHASE_PLAY;
 }
@@ -59,15 +51,9 @@ void game_start(Pet *p, uint8_t kind) {
     p->ball_y = 0;
     p->ball_dy = 0;
     p->mg_phase = PHASE_PLAY;
-  } else if (p->mg_kind == 0) {
-    serve_pong(p);
   } else {
-    /* Arkanoid — auto-serve */
-    p->ball_x = p->paddle + PADDLE_W / 2;
-    p->ball_y = PADDLE_Y - 8;
-    p->ball_dx = (rnd(p) & 1) ? 1 : -1;
-    p->ball_dy = -1;
-    p->mg_phase = PHASE_PLAY;
+    /* Pong + Arkanoid share auto-serve */
+    serve_pong(p);
   }
 }
 
@@ -140,7 +126,7 @@ static void tick_ark(Pet *p) {
   if (p->mg_phase != PHASE_PLAY) return;
   move_ball_ark(p);
   if (p->ball_y >= 14 && p->ball_y <= 22 && p->bricks) {
-    uint8_t idx = (uint8_t)(p->ball_x / 16);
+    uint8_t idx = (uint8_t)((uint16_t)p->ball_x >> 4);
     if (idx > 7) idx = 7;
     uint8_t bit = (uint8_t)(1 << idx);
     if (p->bricks & bit) {
@@ -158,18 +144,12 @@ static void tick_ark(Pet *p) {
   if (p->ball_y > 64) {
     p->mg_miss++;
     if (p->mg_miss >= 3) finish(p);
-    else {
-      p->ball_x = p->paddle + PADDLE_W / 2;
-      p->ball_y = PADDLE_Y - 8;
-      p->ball_dx = (rnd(p) & 1) ? 1 : -1;
-      p->ball_dy = -1;
-      p->mg_phase = PHASE_PLAY;
-    }
+    else serve_pong(p);
   }
 }
 
 static void tick_runner(Pet *p) {
-  uint8_t spd = (uint8_t)(2 + p->mg_hits / 2);
+  uint8_t spd = (uint8_t)(2 + (p->mg_hits >> 1));
   if (spd > 5) spd = 5;
   p->ball_x -= (int16_t)spd;
 
@@ -206,7 +186,7 @@ static void tick_runner(Pet *p) {
     if (p->ball_x < 30 && p->ball_x + 6 > 18 && p->ball_y < need) {
       p->mg_miss++;
       p->mg_flash = 14;
-      p->ball_x = (int16_t)(105 + (rnd(p) & 31));
+      p->ball_x = (int16_t)(105 + (game_rnd(p) & 31));
       if (p->mg_miss >= 3) finish(p);
       return;
     }
@@ -214,7 +194,7 @@ static void tick_runner(Pet *p) {
   if (p->ball_x < -10) {
     p->mg_hits++;
     p->mg_flash = 3;
-    p->ball_x = (int16_t)(105 + (rnd(p) & 31));
+    p->ball_x = (int16_t)(105 + (game_rnd(p) & 31));
     if (p->mg_hits >= 12) finish(p);
   }
 }

@@ -1,0 +1,41 @@
+---
+description: How to add or edit pet sprites without blowing ATtiny85 Flash
+globs: shared/sprites.ts,scripts/export-sprites.mjs,firmware/src/sprites.c,firmware/src/sprites.h,firmware/src/ui.c
+alwaysApply: false
+---
+
+# Sprites (ATtiny85)
+
+## Source of truth
+
+- Edit **`shared/sprites.ts` only**. Never hand-edit `firmware/src/sprites.c`.
+- After changes: `node scripts/export-sprites.mjs` then `make -C firmware size`.
+
+## Format
+
+- 32×32, 128 bytes, LCD-export style (**ink = 0**), wrap in `ink0([...])`.
+- MSB = leftmost pixel. Export inverts to «bit 1 = draw».
+- Frame 0 = eyes open, frame 1 = blink. Blink should change **eyes only** (same silhouette) so XY-crop stays tight.
+
+```typescript
+// ✅ GOOD — open + blink pair, empty margins OK (export crops them)
+const BABY_OPEN = ink0([ /* 128 bytes */ ]);
+const BABY_BLINK = ink0([ /* same body, closed eyes */ ]);
+
+// ❌ BAD — full second pose that differs everywhere (doubles Flash after crop)
+```
+
+## Flash budget
+
+- Unique bitmap ≈ **48–128 B** after XY-crop (empty rows/cols stripped).
+- Keep **≥1 KB** free Flash (`make -C firmware size`). AdultA/B already share Adult art — add unique frames only if budget allows.
+- If Flash grows by a full **128 B per frame**, crop did not fire (ink in corners / wrong inversion).
+
+## Wiring checklist
+
+1. Add `const NAME = ink0([...])` in `shared/sprites.ts`.
+2. Hook into `SPRITES[]` (emulator) with matching stage index.
+3. Add `[TS_NAME, "spr_…"]` to `pairs` in `scripts/export-sprites.mjs`.
+4. Wire `sprite_stage` / `sprite_dead` / wings in the export template (re-run export).
+5. Prefer existing `SPRITE_DEAD` / wing helpers — do not invent new stage slots for death FX.
+6. Do **not** port emulator icons/Cyrillic font into PROGMEM «while you’re here».
