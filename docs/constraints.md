@@ -44,7 +44,7 @@ Full 32×32 sprites are in firmware (`sprites.c`, XY-cropped empty rows/cols). R
 | Block | Notes | Approx |
 |-------|-------|-------:|
 | Pet sprites (XY-cropped PROGMEM) | unique frames in `sprites.c` | **~756 B** data |
-| Icons / font | mostly emulator UI; firmware digits-only font ~50 B | small on device |
+| Icons / font | emulator: 5 icons + poop bitmap; firmware digits-only font ~50 B | icons+poop **~60 B** (TS est.) |
 | Games + OLED + buzz + logic | rest of `.text` | — |
 
 Target: keep **≥1 KB** free Flash for polish / rare events — **currently ~1.6 KB**.
