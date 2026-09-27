@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { createNewPet, handleInput, tickLife, tickAnim, isAlive, buildRenderList } from "./pet";
 import { Button, Screen, Stage, FLAG_SICK, FLAG_DIRTY } from "./types";
-import { SPRITE_DEAD, SPRITE_WING_L, SPRITE_WING_R } from "./sprites";
+import {
+  SPRITE_BABY_BACK,
+  SPRITE_CHILD_BACK,
+  SPRITE_DEAD,
+  SPRITE_WING_L,
+  SPRITE_WING_R,
+} from "./sprites";
 import { deserialize, serialize, SAVE_SIZE } from "./save";
 import { resolveAdultStage, tryRareEvent } from "./phase2";
 import { BitmapId } from "./icons";
@@ -92,6 +98,32 @@ describe("pet life", () => {
     pet.flags |= FLAG_DIRTY;
     const cmds = buildRenderList(pet);
     expect(cmds.some((c) => c.op === "bitmap" && c.id === BitmapId.Poop)).toBe(true);
+  });
+
+  it("poop feedback shows back sprite then front again", () => {
+    const pet = createNewPet();
+    pet.screen = Screen.Home;
+    pet.stage = Stage.Child;
+    pet.flags |= FLAG_DIRTY;
+    pet.feedbackTicks = 10;
+    const during = buildRenderList(pet);
+    expect(during.some((c) => c.op === "sprite" && c.id === SPRITE_CHILD_BACK)).toBe(true);
+    expect(during.some((c) => c.op === "text8" && c.text === "НАДУДОНИЛ")).toBe(true);
+
+    pet.feedbackTicks = 0;
+    const after = buildRenderList(pet);
+    expect(after.some((c) => c.op === "sprite" && c.id === Stage.Child)).toBe(true);
+    expect(after.some((c) => c.op === "sprite" && c.id === SPRITE_CHILD_BACK)).toBe(false);
+  });
+
+  it("baby poop feedback uses baby back sprite", () => {
+    const pet = createNewPet();
+    pet.screen = Screen.Home;
+    pet.stage = Stage.Baby;
+    pet.flags |= FLAG_DIRTY;
+    pet.feedbackTicks = 5;
+    const cmds = buildRenderList(pet);
+    expect(cmds.some((c) => c.op === "sprite" && c.id === SPRITE_BABY_BACK)).toBe(true);
   });
 
   it("dead render shows wings beside hamster and flies up", () => {

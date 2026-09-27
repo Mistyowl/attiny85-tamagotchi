@@ -20,5 +20,6 @@ void sprite_stage(uint8_t stage, uint8_t frame, SpriteDesc *out);
 void sprite_dead(SpriteDesc *out);
 void sprite_wing_l(SpriteDesc *out);
 void sprite_wing_r(SpriteDesc *out);
+void sprite_poop_back(uint8_t stage, SpriteDesc *out);
 
 #endif

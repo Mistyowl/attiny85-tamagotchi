@@ -61,6 +61,9 @@ const pairs = [
   ["DEAD_HAMSTER", "spr_dead"],
   ["WING_LEFT", "spr_wing_l"],
   ["WING_RIGHT", "spr_wing_r"],
+  ["BABY_BACK", "spr_baby_back"],
+  ["CHILD_BACK", "spr_child_back"],
+  ["ADULT_BACK", "spr_adult_back"],
 ];
 
 const cropped = {};
@@ -121,6 +124,26 @@ void sprite_wing_l(SpriteDesc *out) {
 
 void sprite_wing_r(SpriteDesc *out) {
   fill_desc(out, ${cropped.spr_wing_r.x0}, ${cropped.spr_wing_r.y0}, ${cropped.spr_wing_r.w}, ${cropped.spr_wing_r.h}, spr_wing_r);
+}
+
+/** Back view during toilet feedback (stage → baby / child / adult art). */
+void sprite_poop_back(uint8_t stage, SpriteDesc *out) {
+  switch (stage) {
+    case 1:
+      fill_desc(out, ${cropped.spr_baby_back.x0}, ${cropped.spr_baby_back.y0}, ${cropped.spr_baby_back.w}, ${cropped.spr_baby_back.h}, spr_baby_back);
+      break;
+    case 2:
+      fill_desc(out, ${cropped.spr_child_back.x0}, ${cropped.spr_child_back.y0}, ${cropped.spr_child_back.w}, ${cropped.spr_child_back.h}, spr_child_back);
+      break;
+    case 3:
+    case 4:
+    case 5:
+      fill_desc(out, ${cropped.spr_adult_back.x0}, ${cropped.spr_adult_back.y0}, ${cropped.spr_adult_back.w}, ${cropped.spr_adult_back.h}, spr_adult_back);
+      break;
+    default:
+      sprite_stage(stage, 0, out);
+      break;
+  }
 }
 `;
 

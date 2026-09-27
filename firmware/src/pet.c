@@ -101,7 +101,10 @@ void pet_tick_life(Pet *p) {
     if (p->hunger >= 85 || p->happiness <= 15 || p->energy <= 15)
       p->health = pet_clamp((int16_t)p->health - 2);
     if (p->hunger >= 90 && (p->age_ticks & 7) == 0) p->flags |= FLAG_SICK;
-    if (p->happiness <= 20 && (p->age_ticks & 15) == 0) p->flags |= FLAG_DIRTY;
+    if (p->happiness <= 20 && (p->age_ticks & 15) == 0 && !(p->flags & FLAG_DIRTY)) {
+      p->flags |= FLAG_DIRTY;
+      p->feedback = 10; /* ~few seconds back view */
+    }
     if (p->flags & FLAG_SICK) p->health = pet_clamp((int16_t)p->health - 1);
   }
 

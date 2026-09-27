@@ -1,5 +1,5 @@
 import { IconId, BitmapId, POOP_X, POOP_Y } from "./icons";
-import { SPRITE_DEAD, SPRITE_H, SPRITE_WING_L, SPRITE_WING_R } from "./sprites";
+import { poopBackSpriteId, SPRITE_DEAD, SPRITE_H, SPRITE_WING_L, SPRITE_WING_R } from "./sprites";
 import {
   FLAG_DIRTY,
   FLAG_SICK,
@@ -427,12 +427,14 @@ export function buildRenderList(pet: PetState): RenderCmd[] {
   }
 
   const spriteY = pet.feedbackTicks > 0 ? 6 : 8;
+  const poopTurn =
+    (pet.flags & FLAG_DIRTY) !== 0 && pet.feedbackTicks > 0 ? poopBackSpriteId(pet.stage) : null;
   cmds.push({
     op: "sprite",
-    id: pet.stage,
+    id: poopTurn ?? pet.stage,
     x: 48,
     y: spriteY,
-    frame: petBlinkFrame(pet),
+    frame: poopTurn != null ? 0 : petBlinkFrame(pet),
   });
 
   // Sleepy: first Z by right ear, then far Z when very tired

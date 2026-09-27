@@ -160,7 +160,10 @@ void ui_draw(const Pet *p) {
         else
           fr = p->anim & 1;
         SpriteDesc spr;
-        sprite_stage(p->stage, fr, &spr);
+        if (p->screen == SCR_HOME && (p->flags & FLAG_DIRTY) && p->feedback)
+          sprite_poop_back(p->stage, &spr);
+        else
+          sprite_stage(p->stage, fr, &spr);
         page_bm(pg, PET_X, (int16_t)(pet_y + spr.y0), &spr);
       }
 
