@@ -150,6 +150,18 @@ describe("pet life", () => {
     expect(pet.health).toBe(100);
   });
 
+  it("three Select clicks with release still restart after death", () => {
+    const pet = createNewPet();
+    pet.screen = Screen.Dead;
+    pet.health = 0;
+    for (let i = 0; i < 3; i++) {
+      handleInput(pet, Button.Select, true);
+      handleInput(pet, Button.Select, false);
+    }
+    expect(pet.screen).toBe(Screen.Boot);
+    expect(pet.health).toBe(100);
+  });
+
   it("first press after display off only wakes", () => {
     const pet = createNewPet();
     pet.screen = Screen.Home;

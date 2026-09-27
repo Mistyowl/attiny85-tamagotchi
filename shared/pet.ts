@@ -264,7 +264,10 @@ export function handleInput(pet: PetState, button: Button, pressed: boolean): vo
   else pet.btnHeld &= ~bit;
 
   if (!pressed) {
-    if (button === Button.Select) pet.holdSelectTicks = 0;
+    // On Dead, count Select presses across click edges (firmware never clears on release).
+    if (button === Button.Select && pet.screen !== Screen.Dead) {
+      pet.holdSelectTicks = 0;
+    }
     return;
   }
 

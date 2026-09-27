@@ -21,18 +21,68 @@
 
       <main class="stage">
         <div class="device" aria-label="Handheld pet emulator">
-          <div class="device__bezel">
-            <div class="device__screw device__screw--tl"></div>
-            <div class="device__screw device__screw--tr"></div>
-            <canvas id="oled" width="128" height="64" aria-label="OLED display"></canvas>
-            <div class="device__screw device__screw--bl"></div>
-            <div class="device__screw device__screw--br"></div>
-          </div>
+          <div class="device__loop" aria-hidden="true"></div>
+          <div class="device__shell">
+            <svg
+              class="device__cloud"
+              viewBox="0 0 320 280"
+              aria-hidden="true"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              <!-- Continuous white cloud — wider bottom lobes, no gray edge strokes -->
+              <path
+                class="device__cloud-path"
+                fill="#ffffff"
+                d="M160 18
+                   C184 6 214 12 230 30
+                   C258 22 292 48 288 78
+                   C316 98 318 138 296 160
+                   C312 192 286 226 248 234
+                   C228 258 186 264 160 254
+                   C134 264 92 258 72 234
+                   C34 226 8 192 24 160
+                   C2 138 4 98 32 78
+                   C28 48 62 22 90 30
+                   C106 12 136 6 160 18 Z"
+              />
+            </svg>
 
-          <div class="device__keys" role="group" aria-label="Buttons">
-            <button type="button" class="key" data-btn="0" id="btn-left">◀</button>
-            <button type="button" class="key key--select" data-btn="1" id="btn-select">●</button>
-            <button type="button" class="key" data-btn="2" id="btn-right">▶</button>
+            <div class="device__face">
+              <div class="device__well">
+                <div class="device__bezel">
+                  <div class="device__eyes" aria-hidden="true">
+                    <span></span><span></span>
+                  </div>
+                  <div class="device__screen">
+                    <canvas id="oled" width="128" height="64" aria-label="OLED display"></canvas>
+                  </div>
+                </div>
+              </div>
+
+              <div class="device__keys" role="group" aria-label="Buttons">
+                <button
+                  type="button"
+                  class="key key--left"
+                  data-btn="0"
+                  id="btn-left"
+                  aria-label="Left"
+                ></button>
+                <button
+                  type="button"
+                  class="key key--select"
+                  data-btn="1"
+                  id="btn-select"
+                  aria-label="Select"
+                ></button>
+                <button
+                  type="button"
+                  class="key key--right"
+                  data-btn="2"
+                  id="btn-right"
+                  aria-label="Right"
+                ></button>
+              </div>
+            </div>
           </div>
           <p class="device__hint">ПРЫГ: любая кнопка = прыжок · Skip to Baby → Play</p>
         </div>
