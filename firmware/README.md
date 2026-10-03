@@ -53,6 +53,8 @@ make -C firmware size
 
 **Без Micronucleus** — только ISP, иначе Flash не хватит под текущий бинарник (~6518 B).
 
+Пошаговая схема Arduino Uno as ISP, fuse-ы 8 МГц, полная электросхема и пайка на 80×20 мм (3 кнопки, HPA17A, OLED на проводах): **[`docs/hardware-assembly.md`](../docs/hardware-assembly.md)**.
+
 ```bash
 cd firmware
 make hex

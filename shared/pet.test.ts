@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createNewPet, handleInput, tickLife, tickAnim, isAlive, buildRenderList } from "./pet";
-import { Button, Screen, Stage, FLAG_SICK, FLAG_DIRTY } from "./types";
+import {
+  Button,
+  Screen,
+  Stage,
+  FLAG_SICK,
+  FLAG_DIRTY,
+  FLAG_SLEEPING,
+  STAGE_AGE,
+  MenuAction,
+} from "./types";
 import {
   SPRITE_BABY_BACK,
   SPRITE_CHILD_BACK,
@@ -26,8 +35,27 @@ describe("pet life", () => {
     const pet = createNewPet();
     pet.screen = Screen.Home;
     pet.bootTicks = 0;
-    for (let i = 0; i < 40; i++) tickLife(pet);
+    for (let i = 0; i < STAGE_AGE[Stage.Egg]; i++) tickLife(pet);
     expect(pet.stage).toBe(Stage.Baby);
+  });
+
+  it("evolves Baby → Child and Child → Adult at stage ages", () => {
+    const baby = createNewPet();
+    baby.screen = Screen.Home;
+    baby.bootTicks = 0;
+    baby.stage = Stage.Baby;
+    baby.ageTicks = STAGE_AGE[Stage.Baby] - 1;
+    tickLife(baby);
+    expect(baby.stage).toBe(Stage.Child);
+
+    const child = createNewPet();
+    child.screen = Screen.Home;
+    child.bootTicks = 0;
+    child.stage = Stage.Child;
+    child.careScore = 50;
+    child.ageTicks = STAGE_AGE[Stage.Child] - 1;
+    tickLife(child);
+    expect(child.stage).toBe(Stage.Adult);
   });
 
   it("dies when health hits zero", () => {
@@ -40,6 +68,45 @@ describe("pet life", () => {
     pet.happiness = 5;
     pet.energy = 5;
     for (let i = 0; i < 20; i++) tickLife(pet);
+    expect(pet.screen).toBe(Screen.Dead);
+    expect(isAlive(pet)).toBe(false);
+  });
+
+  it("survives overnight sleep without health loss", () => {
+    const pet = createNewPet();
+    pet.screen = Screen.Home;
+    pet.bootTicks = 0;
+    pet.stage = Stage.Baby;
+    pet.hunger = 20;
+    pet.happiness = 80;
+    pet.energy = 90;
+    pet.health = 100;
+    pet.menuIndex = MenuAction.Sleep;
+    handleInput(pet, Button.Select, true);
+    expect(pet.screen).toBe(Screen.Sleeping);
+    expect(pet.energy).toBe(30);
+
+    const healthBefore = pet.health;
+    for (let i = 0; i < 3600; i++) tickLife(pet);
+
+    expect(isAlive(pet)).toBe(true);
+    expect(pet.health).toBe(healthBefore);
+    expect(pet.flags & FLAG_SLEEPING).toBe(0);
+    expect(pet.screen).toBe(Screen.Home);
+    // Auto-woke during the night; a few awake ticks may dip energy slightly after.
+    expect(pet.energy).toBeGreaterThanOrEqual(80);
+  });
+
+  it("dies from awake neglect over ~one night", () => {
+    const pet = createNewPet();
+    pet.screen = Screen.Home;
+    pet.bootTicks = 0;
+    pet.stage = Stage.Baby;
+    pet.hunger = 20;
+    pet.happiness = 80;
+    pet.energy = 90;
+    pet.health = 100;
+    for (let i = 0; i < 4000; i++) tickLife(pet);
     expect(pet.screen).toBe(Screen.Dead);
     expect(isAlive(pet)).toBe(false);
   });

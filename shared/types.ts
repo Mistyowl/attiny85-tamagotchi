@@ -104,19 +104,35 @@ export const BLINK_OPEN_TICKS = 8;
 export const BLINK_CLOSED_TICKS = 1;
 export const BLINK_CYCLE_TICKS = BLINK_OPEN_TICKS + BLINK_CLOSED_TICKS;
 
-/** Sleep: +12 energy / WDT tick, wake at ≥85 → typically 1–6 ticks (≈8–48s real). */
-export const SLEEP_ENERGY_PER_TICK = 12;
+/**
+ * Life balance (WDT ~8 s / tick):
+ * - Sleep overnight (~8 h) if put to bed; awake neglect ~8 h can kill.
+ * - Stages stretch to ~28 days to Adult; no death from old age.
+ */
+/** On Sleep action: energy capped so auto-wake lasts ~(85−cap)×SLEEP_ENERGY_EVERY ticks. */
+export const SLEEP_START_ENERGY_CAP = 30;
+/** Sleep: +1 energy every N life ticks (~8.5 min at N=64). */
+export const SLEEP_ENERGY_EVERY = 64;
+/** Sleep: +1 hunger every N life ticks (~17 min at N=128). */
+export const SLEEP_HUNGER_EVERY = 128;
 export const SLEEP_WAKE_ENERGY = 85;
 /** Home: show one Z when energy ≤ this (a bit sleepy). */
 export const SLEEPY_ENERGY = 30;
 /** Home: show two Z when energy ≤ this (very sleepy). */
 export const VERY_SLEEPY_ENERGY = 15;
 
-/** Life balance: ticks until stage advance (WDT ~8s → hours of real time). */
+/** Awake: +1 hunger / −1 happy / −1 energy every N ticks (~4.3 min at N=32). */
+export const AWAKE_STAT_EVERY = 32;
+/** Awake while stressed: −1 health every N ticks. */
+export const STRESS_HEALTH_EVERY = 16;
+/** Awake while SICK: −1 health every N ticks. */
+export const SICK_HEALTH_EVERY = 32;
+
+/** Life balance: cumulative ageTicks until stage advance. */
 export const STAGE_AGE = {
-  [Stage.Egg]: 30, // ~4 min real → hatch (emulator time-scale adjustable)
-  [Stage.Baby]: 180,
-  [Stage.Child]: 360,
+  [Stage.Egg]: 450, // ~1 h → hatch
+  [Stage.Baby]: 43_200, // ~4 days → Child
+  [Stage.Child]: 302_400, // ~28 days → Adult*
   [Stage.Adult]: 0,
   [Stage.AdultA]: 0,
   [Stage.AdultB]: 0,

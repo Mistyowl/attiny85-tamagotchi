@@ -354,13 +354,13 @@ function wireLab(): void {
   };
 
   document.getElementById("skip-baby")?.addEventListener("click", () => {
-    skipToStage(Stage.Baby, 40, "маленький (Baby)");
+    skipToStage(Stage.Baby, 500, "маленький (Baby)");
   });
   document.getElementById("skip-child")?.addEventListener("click", () => {
-    skipToStage(Stage.Child, 200, "средний (Child)");
+    skipToStage(Stage.Child, 44_000, "средний (Child)");
   });
   document.getElementById("skip-adult")?.addEventListener("click", () => {
-    skipToStage(Stage.Adult, 400, "большой (Adult)");
+    skipToStage(Stage.Adult, 302_400, "большой (Adult)");
   });
 }
 

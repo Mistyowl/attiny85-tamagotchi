@@ -23,7 +23,8 @@ npm run build
 - `shared/` — portable game logic (stats, tick, input, save, sprites, phase-2 hooks)
 - `emulator/` — Canvas OLED + 3 buttons + time scale + battery estimate
 - `docs/constraints.md` — pinout, EEPROM, power budget
-- `firmware/` — ATtiny85 skeleton for the later C port
+- [`docs/hardware-assembly.md`](docs/hardware-assembly.md) — полный функционал, заливка через Arduino Uno as ISP, электросхема и пайка (OLED на проводах, HPA17A, 3 кнопки)
+- `firmware/` — ATtiny85 C firmware
 
 ## Controls
 

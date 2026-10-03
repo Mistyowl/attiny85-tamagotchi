@@ -13,8 +13,13 @@ import {
   Stage,
   STAGE_AGE,
   STAT_MAX,
-  SLEEP_ENERGY_PER_TICK,
+  SLEEP_START_ENERGY_CAP,
+  SLEEP_ENERGY_EVERY,
+  SLEEP_HUNGER_EVERY,
   SLEEP_WAKE_ENERGY,
+  AWAKE_STAT_EVERY,
+  STRESS_HEALTH_EVERY,
+  SICK_HEALTH_EVERY,
   SLEEPY_ENERGY,
   VERY_SLEEPY_ENERGY,
   BLINK_CYCLE_TICKS,
@@ -182,22 +187,31 @@ export function tickLife(pet: PetState): void {
   pet.ageTicks++;
 
   const sleeping = (pet.flags & FLAG_SLEEPING) !== 0 || pet.screen === Screen.Sleeping;
+  // Power-of-2 periods: (age & (N-1)) === 0 — matches firmware (no uint32 %).
+  const onPeriod = (every: number) => (pet.ageTicks & (every - 1)) === 0;
 
   if (sleeping) {
-    pet.energy = clampStat(pet.energy + SLEEP_ENERGY_PER_TICK);
-    pet.hunger = clampStat(pet.hunger + 1);
+    if (onPeriod(SLEEP_ENERGY_EVERY)) {
+      pet.energy = clampStat(pet.energy + 1);
+    }
+    if (onPeriod(SLEEP_HUNGER_EVERY)) {
+      pet.hunger = clampStat(pet.hunger + 1);
+    }
     if (pet.energy >= SLEEP_WAKE_ENERGY) {
       pet.flags &= ~FLAG_SLEEPING;
       pet.screen = Screen.Home;
       pet.feedbackTicks = 2;
     }
   } else {
-    pet.hunger = clampStat(pet.hunger + 2);
-    pet.happiness = clampStat(pet.happiness - 1);
-    pet.energy = clampStat(pet.energy - 1);
+    if (onPeriod(AWAKE_STAT_EVERY)) {
+      pet.hunger = clampStat(pet.hunger + 1);
+      pet.happiness = clampStat(pet.happiness - 1);
+      pet.energy = clampStat(pet.energy - 1);
+    }
 
-    if (pet.hunger >= 85 || pet.happiness <= 15 || pet.energy <= 15) {
-      pet.health = clampStat(pet.health - 2);
+    const stressed = pet.hunger >= 85 || pet.happiness <= 15 || pet.energy <= 15;
+    if (stressed && onPeriod(STRESS_HEALTH_EVERY)) {
+      pet.health = clampStat(pet.health - 1);
     }
 
     if (pet.hunger >= 90 && (pet.ageTicks & 7) === 0) {
@@ -206,7 +220,7 @@ export function tickLife(pet: PetState): void {
     if (pet.happiness <= 20 && (pet.ageTicks & 15) === 0) {
       pet.flags |= FLAG_DIRTY;
     }
-    if (pet.flags & FLAG_SICK) {
+    if ((pet.flags & FLAG_SICK) !== 0 && onPeriod(SICK_HEALTH_EVERY)) {
       pet.health = clampStat(pet.health - 1);
     }
 
@@ -355,6 +369,9 @@ function applyAction(pet: PetState, action: MenuAction): void {
       }
       break;
     case MenuAction.Sleep:
+      if (pet.energy > SLEEP_START_ENERGY_CAP) {
+        pet.energy = SLEEP_START_ENERGY_CAP;
+      }
       pet.flags |= FLAG_SLEEPING;
       pet.screen = Screen.Sleeping;
       pet.feedbackTicks = 2;

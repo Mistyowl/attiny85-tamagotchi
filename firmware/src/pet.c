@@ -3,11 +3,17 @@
 #include "buzz.h"
 #include <string.h>
 
-#define STAGE_EGG   30
-#define STAGE_BABY  180
-#define STAGE_CHILD 360
-#define SLEEP_GAIN  12
-#define SLEEP_WAKE  85
+/* Life balance: WDT ~8s/tick — sleep ~8h overnight; Adult ~28 days. */
+#define STAGE_EGG              450u
+#define STAGE_BABY             43200u
+#define STAGE_CHILD            302400u
+#define SLEEP_START_ENERGY_CAP 30
+#define SLEEP_ENERGY_EVERY     64
+#define SLEEP_HUNGER_EVERY     128
+#define SLEEP_WAKE             85
+#define AWAKE_STAT_EVERY       32
+#define STRESS_HEALTH_EVERY    16
+#define SICK_HEALTH_EVERY      32
 
 uint8_t pet_clamp(int16_t v) {
   if (v < 0) return 0;
@@ -62,6 +68,7 @@ static void apply_action(Pet *p) {
       break;
     }
     case 2: /* sleep */
+      if (p->energy > SLEEP_START_ENERGY_CAP) p->energy = SLEEP_START_ENERGY_CAP;
       p->flags |= FLAG_SLEEPING;
       p->screen = SCR_SLEEP;
       p->feedback = 2;
@@ -87,25 +94,32 @@ void pet_tick_life(Pet *p) {
 
   p->age_ticks++;
 
+  /* Power-of-2 periods via mask — avoid age_ticks % N (libgcc). */
   if ((p->flags & FLAG_SLEEPING) || p->screen == SCR_SLEEP) {
-    p->energy = pet_clamp((int16_t)p->energy + SLEEP_GAIN);
-    p->hunger = pet_clamp((int16_t)p->hunger + 1);
+    if ((p->age_ticks & (SLEEP_ENERGY_EVERY - 1)) == 0)
+      p->energy = pet_clamp((int16_t)p->energy + 1);
+    if ((p->age_ticks & (SLEEP_HUNGER_EVERY - 1)) == 0)
+      p->hunger = pet_clamp((int16_t)p->hunger + 1);
     if (p->energy >= SLEEP_WAKE) {
       p->flags &= (uint8_t)~FLAG_SLEEPING;
       p->screen = SCR_HOME;
     }
   } else {
-    p->hunger = pet_clamp((int16_t)p->hunger + 2);
-    p->happiness = pet_clamp((int16_t)p->happiness - 1);
-    p->energy = pet_clamp((int16_t)p->energy - 1);
-    if (p->hunger >= 85 || p->happiness <= 15 || p->energy <= 15)
-      p->health = pet_clamp((int16_t)p->health - 2);
+    if ((p->age_ticks & (AWAKE_STAT_EVERY - 1)) == 0) {
+      p->hunger = pet_clamp((int16_t)p->hunger + 1);
+      p->happiness = pet_clamp((int16_t)p->happiness - 1);
+      p->energy = pet_clamp((int16_t)p->energy - 1);
+    }
+    if ((p->hunger >= 85 || p->happiness <= 15 || p->energy <= 15) &&
+        (p->age_ticks & (STRESS_HEALTH_EVERY - 1)) == 0)
+      p->health = pet_clamp((int16_t)p->health - 1);
     if (p->hunger >= 90 && (p->age_ticks & 7) == 0) p->flags |= FLAG_SICK;
     if (p->happiness <= 20 && (p->age_ticks & 15) == 0 && !(p->flags & FLAG_DIRTY)) {
       p->flags |= FLAG_DIRTY;
       p->feedback = 10; /* ~few seconds back view */
     }
-    if (p->flags & FLAG_SICK) p->health = pet_clamp((int16_t)p->health - 1);
+    if ((p->flags & FLAG_SICK) && (p->age_ticks & (SICK_HEALTH_EVERY - 1)) == 0)
+      p->health = pet_clamp((int16_t)p->health - 1);
   }
 
   if (p->stage == ST_EGG && p->age_ticks >= STAGE_EGG) {
