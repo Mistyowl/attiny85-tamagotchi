@@ -59,16 +59,20 @@ static const uint16_t sfx_chirp[] PROGMEM = {208, 84, 0, 40, 178, 126, 0, 0};
 static const uint16_t sfx_sad[] PROGMEM = {555, 81, 714, 77, 0, 0};
 static const uint16_t sfx_die[] PROGMEM = {833, 60, 1111, 54, 1666, 48, 0, 0};
 static const uint16_t sfx_wake[] PROGMEM = {357, 56, 277, 90, 0, 0};
-/* SFX_HIT / SFX_FART: emulator-only — not linked on device */
+/* Hit 2000 Hz / 25 ms — shared/sound.ts */
+static const uint16_t sfx_hit[] PROGMEM = {250, 50, 0, 0};
+/* Fart — low stutter; shared/sound.ts */
+static const uint16_t sfx_fart[] PROGMEM = {
+    2272, 6, 0, 12, 2941, 5, 0, 12, 3846, 5, 0, 14, 5263, 5, 7142, 6, 0, 0};
 
 static const uint16_t *const sfx_table[] PROGMEM = {
     0,
     sfx_click, sfx_feed, sfx_play, sfx_sleep, sfx_medicine,
     sfx_hatch, sfx_evolve, sfx_chirp, sfx_sad, sfx_die,
-    sfx_wake};
+    sfx_wake, sfx_hit, sfx_fart};
 
 void buzz_play(uint8_t sfx_id) {
-  if (sfx_id == SFX_NONE || sfx_id > SFX_WAKE) return;
+  if (sfx_id == SFX_NONE || sfx_id > SFX_FART) return;
 
   const uint16_t *seq = (const uint16_t *)pgm_read_ptr(&sfx_table[sfx_id]);
   if (!seq) return;

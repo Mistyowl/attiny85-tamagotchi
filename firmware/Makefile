@@ -14,8 +14,8 @@ LDFLAGS  = -mmcu=$(MCU) -Wl,--gc-sections -Wl,--relax
 
 SRC_DIR  = src
 BUILD    = build
-SRCS     = $(SRC_DIR)/main.c $(SRC_DIR)/pet.c $(SRC_DIR)/save.c $(SRC_DIR)/oled.c $(SRC_DIR)/ui.c $(SRC_DIR)/game.c $(SRC_DIR)/buzz.c $(SRC_DIR)/sprites.c
-OBJS     = $(BUILD)/main.o $(BUILD)/pet.o $(BUILD)/save.o $(BUILD)/oled.o $(BUILD)/ui.o $(BUILD)/game.o $(BUILD)/buzz.o $(BUILD)/sprites.o
+SRCS     = $(SRC_DIR)/main.c $(SRC_DIR)/pet.c $(SRC_DIR)/save.c $(SRC_DIR)/oled.c $(SRC_DIR)/ui.c $(SRC_DIR)/ui_assets.c $(SRC_DIR)/game.c $(SRC_DIR)/buzz.c $(SRC_DIR)/sprites.c
+OBJS     = $(BUILD)/main.o $(BUILD)/pet.o $(BUILD)/save.o $(BUILD)/oled.o $(BUILD)/ui.o $(BUILD)/ui_assets.o $(BUILD)/game.o $(BUILD)/buzz.o $(BUILD)/sprites.o
 ELF      = $(BUILD)/zhorik.elf
 HEX      = $(BUILD)/zhorik.hex
 
@@ -35,6 +35,8 @@ $(BUILD)/save.o: $(SRC_DIR)/save.c | $(BUILD)
 $(BUILD)/oled.o: $(SRC_DIR)/oled.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(BUILD)/ui.o: $(SRC_DIR)/ui.c | $(BUILD)
+	$(CC) $(CFLAGS) -c $< -o $@
+$(BUILD)/ui_assets.o: $(SRC_DIR)/ui_assets.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(BUILD)/game.o: $(SRC_DIR)/game.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@

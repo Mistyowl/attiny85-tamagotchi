@@ -21,19 +21,20 @@ make size
 
 ## Замер (текущий)
 
-После `make size` (Os + `-mcall-prologues` + `-Wl,--relax`, без Arduino core, 2026-09-20):
+После `make size` (Os + `-mcall-prologues` + `-Wl,--relax`, без Arduino core, 2026-10-03):
 
 | | Байты | Из 8192 / 512 |
 |--|------:|---------------|
-| **Flash (text)** | **6518** | ~80% |
-| **RAM (bss)** | **171** | ~33% |
+| **Flash (text)** | **8150** | ~99% |
+| **RAM (bss)** | **173** | ~34% |
 
-Свободно ~**1674 B** Flash. Спрайты 32×32 из `shared/sprites.ts` в `sprites.c` (XY-crop пустых строк и столбцов).
+Свободно ~**42 B** Flash. Спрайты 32×32 + UI + SFX 1–13. OLED auto-off ~8 с, wake по PCINT.
 
 Перегенерация арта после правок в TS:
 
 ```bash
 node scripts/export-sprites.mjs
+node scripts/export-ui-assets.mjs
 make -C firmware size
 ```
 
@@ -45,7 +46,8 @@ make -C firmware size
 | `src/pet.c` | жизнь / меню |
 | `src/game.c` | ПОНГ / БЛОК / ПРЫГ |
 | `src/oled.c` | SoftI2C + SSD1306 page mode |
-| `src/ui.c` | отрисовка по страницам (128 Б буфер) |
+| `src/ui.c` | отрисовка по страницам (128 Б буфер), паритет Home с сайтом |
+| `src/ui_assets.c` | шрифт/иконки/строки из `shared/font.ts` + `icons.ts` |
 | `src/sprites.c` | PROGMEM 32×32 из `shared/sprites.ts` |
 | `src/save.c` | EEPROM 17 Б + CRC |
 
@@ -75,4 +77,4 @@ avrdude -c arduino -P COM3 -b 19200 -p t85 -U flash:w:build/zhorik.hex:i
 
 Плата «ATTINY Programming Board» с Micro-USB — сокет/обвязка; прошивка через её USB (Digispark) не используется.
 
-PCINT для пробуждения по кнопке ещё не включён — для size-сборки не нужен.
+PCINT на кнопках включён только на время сна с выключенным OLED (wake); во время UI/buzz выключен.

@@ -25,40 +25,36 @@ Buzzer shares Left (`PIN_BUZZER`): while beeping the pin is driven as OUTPUT squ
 
 ISP without bootloader = full 8 KB.
 
-**Decision: no Micronucleus / Digispark USB bootloader.** It costs ~1.5–2 KB Flash; current firmware (~6518 B) would not fit. Flash only via ISP (USBasp, USBtiny, or Arduino as ISP) for the full 8192 B.
+**Decision: no Micronucleus / Digispark USB bootloader.** It costs ~1.5–2 KB Flash; current firmware (~8150 B) would not fit. Flash only via ISP (USBasp, USBtiny, or Arduino as ISP) for the full 8192 B.
 
 
-### Measured firmware size (2026-09-20)
+### Measured firmware size (2026-10-03)
 
 `make -C firmware size` (`-Os -mcall-prologues -Wl,--relax`, no bootloader):
 
 | | Bytes | Limit | Used | Free |
 |--|------:|------:|-----:|-----:|
-| Flash (`text`) | **6518** | 8192 | **~80%** | **~1674 B (~1.6 KB)** |
-| SRAM (`bss`) | **171** | 512 | **~33%** | **~341 B** (+ stack) |
+| Flash (`text`) | **8150** | 8192 | **~99%** | **~42 B** |
+| SRAM (`bss`) | **173** | 512 | **~34%** | **~339 B** (+ stack) |
 
-Full 32×32 sprites are in firmware (`sprites.c`, XY-cropped empty rows/cols). Rebuild: `make -C firmware size`. Details: [`memory-optimization.md`](memory-optimization.md), [`firmware/README.md`](../firmware/README.md).
+Full 32×32 sprites + Home UI + OLED auto-off/PCINT + SFX Hit/Fart. Rebuild: `make -C firmware size`. Details: [`memory-optimization.md`](memory-optimization.md), [`firmware/README.md`](../firmware/README.md).
 
 ### Assets (TS estimates vs linked)
 
 | Block | Notes | Approx |
 |-------|-------|-------:|
 | Pet sprites (XY-cropped PROGMEM) | unique frames in `sprites.c` | **~756 B** data |
-| Icons / font | emulator: 5 icons + poop bitmap; firmware digits-only font ~50 B | icons+poop **~60 B** (TS est.) |
-| Games + OLED + buzz + logic | rest of `.text` | — |
+| Icons / font / strings | `ui_assets.c` from `shared/icons.ts` + `shared/font.ts` | **~250 B** data |
+| Games + OLED + buzz + UI draw + sleep | rest of `.text` | — |
 
-Target: keep **≥1 KB** free Flash for polish / rare events — **currently ~1.6 KB**.
+Free Flash **~42 B**. Almost full — shrink before any new feature.
 
-### What still fits in ~1.6 KB free
+### What still fits in ~42 B free
 
 | Feature | Est. Flash | Fits? |
 |---------|------------|------:|
-| Rare events (guest / storm) | 100–300 B | Yes |
-| +1 animation frame | ~48–128 B / frame (after crop) | Sparingly |
-| Extra adult branch art | 256–512 B | Yes if careful |
-| Cyrillic UI / icons | ~150–250 | Maybe |
-| 4th minigame | 400–800 B | Risky |
-| Sound / inventory / long dialogue | 1+ KB | Tight |
+| Minigame titles (`ПОНГ`/`БЛОК`/`ПРЫГ`/`ЖДИ`) | ~80–150 | **No** without cuts |
+| Rare events / extra art / 4th minigame | 100+ B | **No** |
 | Micronucleus USB bootloader | 1.5–2 KB | **No — do not use** |
 
 RAM: after 128 B OLED page, ~300+ B left — OK for current games, not a second framebuffer.
@@ -68,7 +64,7 @@ EEPROM: 17 B save used, ~495 B free.
 ## Power model (CR2032 ~200 mAh)
 
 - Default: `POWER_DOWN` + WDT wake ~8 s (life tick) + pin-change wake on buttons
-- OLED on only while UI active; auto-off after ~5–10 s idle
+- OLED on only while UI active; auto-off after **~8 s** idle (Home/Sleep); wake on button (PCINT); WDT life-ticks while panel off
 - EEPROM writes rare (stage change, sleep, critical thresholds, power-off)
 
 Rough currents used by the web battery estimator:
@@ -145,9 +141,9 @@ Menu actions (cursor Left/Right, Select confirm): Feed, Play, Sleep, Medicine (w
 
 ## UI language
 
-On-device text uses a tiny Cyrillic subset: **А Б В Г Д Е Ж З И К Л М Н О П Р С У Х Ы Я** + digits.
+On-device text uses a tiny Cyrillic subset (glyphs actually referenced by exported strings) + digits. Source: [`shared/font.ts`](../shared/font.ts) → `node scripts/export-ui-assets.mjs`.
 
-Strings: `УВЫ`, `ЖМИ`, `ЖДИ`, `ПОНГ`, `БЛОК`, `ПРЫГ`, `ЕДА`, `ИГРА`, `СОН`, `ЛЕК`, `РАД`, `СИЛ`, `ЖИЗ`, `БОЛ`, `ГРЯ`.
+Strings on device: `ЕДА`, `ИГРА`, `СОН`, `ЛЕК`, `БОЛ`, `НАДУДОНИЛ`, `УВЫ`, `ЖМИ`.
 
-Menu shows the **selected** action as centered text (◀/▶ cycle). No UI icons.
+Menu: **selected** action as centered text with invert highlight (◀/▶ cycle). Stats: **8×8 icons** + hbar (same layout as emulator). Deferred for Flash: minigame titles `ПОНГ`/`БЛОК`/`ПРЫГ`, `ЖДИ`.
 

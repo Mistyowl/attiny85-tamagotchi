@@ -117,6 +117,7 @@ void pet_tick_life(Pet *p) {
     if (p->happiness <= 20 && (p->age_ticks & 15) == 0 && !(p->flags & FLAG_DIRTY)) {
       p->flags |= FLAG_DIRTY;
       p->feedback = 10; /* ~few seconds back view */
+      buzz_play(SFX_FART);
     }
     if ((p->flags & FLAG_SICK) && (p->age_ticks & (SICK_HEALTH_EVERY - 1)) == 0)
       p->health = pet_clamp((int16_t)p->health - 1);

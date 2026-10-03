@@ -1,4 +1,5 @@
 #include "game.h"
+#include "buzz.h"
 
 #define PADDLE_W 24
 #define BALL 3
@@ -108,6 +109,7 @@ static void tick_pong(Pet *p) {
     p->ball_y = PADDLE_Y - BALL - 1;
     p->ball_dy = -1;
     p->mg_hits++;
+    buzz_play(SFX_HIT);
     if (p->mg_hits >= 20) finish(p);
   }
   if (p->ball_y < 4) {
@@ -134,6 +136,7 @@ static void tick_ark(Pet *p) {
       p->ball_dy = (int8_t)-p->ball_dy;
       if (!p->ball_dy) p->ball_dy = 1;
       p->mg_hits++;
+      buzz_play(SFX_HIT);
       if (!p->bricks) finish(p);
     }
   }
@@ -193,6 +196,7 @@ static void tick_runner(Pet *p) {
   }
   if (p->ball_x < -10) {
     p->mg_hits++;
+    buzz_play(SFX_HIT);
     p->mg_flash = 3;
     p->ball_x = (int16_t)(105 + (game_rnd(p) & 31));
     if (p->mg_hits >= 12) finish(p);

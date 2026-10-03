@@ -1,57 +1,100 @@
 /*
  * Page-based UI: one 128-byte page buffer in SRAM (not full framebuffer).
+ * Layout matches shared/pet.ts (Home / Sleep / Dead). Minigame titles deferred.
  */
 #include "ui.h"
 #include "oled.h"
 #include "sprites.h"
 #include "pet.h"
+#include "ui_assets.h"
 #include <avr/pgmspace.h>
 #include <string.h>
 
 #define PADDLE_W_UI 24
 #define PET_X 48
 #define DEATH_WING_SIDE 10
+#define SLEEPY_ENERGY 30
+#define VERY_SLEEPY_ENERGY 15
 
 static uint8_t page[128];
 
-static const uint8_t font5x7[][5] PROGMEM = {
-    {0x3e, 0x51, 0x49, 0x45, 0x3e},
-    {0x00, 0x42, 0x7f, 0x40, 0x00},
-    {0x42, 0x61, 0x51, 0x49, 0x46},
-    {0x21, 0x41, 0x45, 0x4b, 0x31},
-    {0x18, 0x14, 0x12, 0x7f, 0x10},
-    {0x27, 0x45, 0x45, 0x45, 0x39},
-    {0x3c, 0x4a, 0x49, 0x49, 0x30},
-    {0x01, 0x71, 0x09, 0x05, 0x03},
-    {0x36, 0x49, 0x49, 0x49, 0x36},
-    {0x06, 0x49, 0x49, 0x29, 0x1e},
-};
-
 static void page_clear(void) { memset(page, 0, sizeof(page)); }
 
-static void page_pixel(uint8_t x, uint8_t y_in_page, uint8_t on) {
-  if (x >= 128 || y_in_page >= 8) return;
-  if (on) page[x] |= (uint8_t)(1 << y_in_page);
-  else page[x] &= (uint8_t)~(1 << y_in_page);
-}
-
 static void page_fill(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
-  for (uint8_t yy = y; yy < y + h && yy < 8; yy++)
-    for (uint8_t xx = x; xx < x + w && xx < 128; xx++) page_pixel(xx, yy, 1);
-}
-
-static void page_glyph(uint8_t x, char ch) {
-  if (ch < '0' || ch > '9') return;
-  const uint8_t *g = font5x7[ch - '0'];
-  for (uint8_t col = 0; col < 5; col++) {
-    uint8_t bits = pgm_read_byte(&g[col]);
-    for (uint8_t row = 0; row < 7; row++)
-      if (bits & (1 << row)) page_pixel((uint8_t)(x + col), row, 1);
+  for (uint8_t yy = y; yy < y + h && yy < 8; yy++) {
+    uint8_t bit = (uint8_t)(1u << yy);
+    for (uint8_t xx = x; xx < x + w && xx < 128; xx++) page[xx] |= bit;
   }
 }
 
-static void page_num(uint8_t x, uint8_t v) {
-  /* v ≤ 100 — subtract instead of / % (avoids libgcc div) */
+/** MSB-left row bitmap from PROGMEM → absolute screen coords. */
+static void page_rows(uint8_t pg, int16_t x, int16_t y, uint8_t w, uint8_t h,
+                      const uint8_t *data) {
+  uint8_t stride = (uint8_t)((w + 7) >> 3);
+  for (uint8_t row = 0; row < h; row++) {
+    int16_t yy = (int16_t)(y + row);
+    if (yy < 0 || yy >= 64) continue;
+    if ((uint8_t)(yy >> 3) != pg) continue;
+    uint8_t bit = (uint8_t)(1u << (yy & 7));
+    for (uint8_t col = 0; col < stride; col++) {
+      uint8_t b = pgm_read_byte(&data[(uint16_t)row * stride + col]);
+      if (!b) continue;
+      for (uint8_t bx = 0; bx < 8; bx++) {
+        uint8_t sx = (uint8_t)((col << 3) + bx);
+        if (sx >= w) break;
+        if (!(b & (uint8_t)(0x80u >> bx))) continue;
+        int16_t px = (int16_t)(x + sx);
+        if ((uint16_t)px < 128) page[(uint8_t)px] |= bit;
+      }
+    }
+  }
+}
+
+/** Compact bar: 1px frame + fill (approx w*fill/100). */
+static void page_hbar(uint8_t pg, uint8_t x, uint8_t y, uint8_t w, uint8_t fill) {
+  uint16_t num = (uint16_t)w * fill + 50;
+  uint8_t filled = 0;
+  while (num >= 100) {
+    num = (uint16_t)(num - 100);
+    filled++;
+  }
+  for (uint8_t dy = 0; dy < 5; dy++) {
+    int16_t yy = (int16_t)(y + dy);
+    if (yy < 0 || yy >= 64 || (uint8_t)(yy >> 3) != pg) continue;
+    uint8_t bit = (uint8_t)(1u << (yy & 7));
+    uint8_t edge = (uint8_t)(dy == 0 || dy == 4);
+    for (uint8_t i = 0; i < w; i++) {
+      uint8_t xx = (uint8_t)(x + i);
+      if (edge || i == 0 || i == (uint8_t)(w - 1) || (i && i < filled && i + 1 < w))
+        page[xx] |= bit;
+    }
+  }
+}
+
+static void page_glyph_id(uint8_t pg, int16_t x, int16_t y, uint8_t gid) {
+  for (uint8_t col = 0; col < UI_GLYPH_W; col++) {
+    uint8_t bits = pgm_read_byte(&ui_font[gid][col]);
+    for (uint8_t row = 0; row < UI_GLYPH_H; row++) {
+      if (!(bits & (uint8_t)(1 << row))) continue;
+      int16_t yy = (int16_t)(y + row);
+      int16_t xx = (int16_t)(x + col);
+      if (yy < 0 || yy >= 64 || (uint16_t)xx >= 128) continue;
+      if ((uint8_t)(yy >> 3) != pg) continue;
+      page[(uint8_t)xx] |= (uint8_t)(1u << (yy & 7));
+    }
+  }
+}
+
+static void page_text(uint8_t pg, int16_t x, int16_t y, const uint8_t *s) {
+  for (;;) {
+    uint8_t gid = pgm_read_byte(s++);
+    if (gid == UI_STR_END) break;
+    page_glyph_id(pg, x, y, gid);
+    x = (int16_t)(x + UI_CHAR_ADV);
+  }
+}
+
+static void page_num(uint8_t pg, int16_t x, int16_t y, uint8_t v) {
   uint8_t h = 0, t = 0;
   if (v >= 100) {
     h = 1;
@@ -61,33 +104,20 @@ static void page_num(uint8_t x, uint8_t v) {
     v = (uint8_t)(v - 10);
     t++;
   }
-  page_glyph(x, (char)('0' + h));
-  page_glyph((uint8_t)(x + 6), (char)('0' + t));
-  page_glyph((uint8_t)(x + 12), (char)('0' + v));
+  page_glyph_id(pg, x, y, (uint8_t)(UI_GLYPH_DIGIT0 + h));
+  page_glyph_id(pg, (int16_t)(x + UI_CHAR_ADV), y, (uint8_t)(UI_GLYPH_DIGIT0 + t));
+  page_glyph_id(pg, (int16_t)(x + 2 * UI_CHAR_ADV), y, (uint8_t)(UI_GLYPH_DIGIT0 + v));
 }
 
-/** XY-cropped PROGMEM bitmap → current OLED page. */
 static void page_bm(uint8_t pg, int16_t x, int16_t y, const SpriteDesc *s) {
-  const uint8_t stride = (uint8_t)(s->w >> 3);
-  x = (int16_t)(x + s->x0);
-  for (uint8_t sy = 0; sy < s->h; sy++) {
-    int16_t yy = (int16_t)(y + sy);
-    if (yy < 0) continue;
-    if (yy >= 64) break;
-    if ((uint8_t)(yy >> 3) != pg) continue;
-    uint8_t bit = (uint8_t)(1u << (yy & 7));
-    const uint8_t *row = &s->bits[(uint16_t)sy * stride];
-    for (uint8_t col = 0; col < stride; col++) {
-      uint8_t b = pgm_read_byte(&row[col]);
-      if (!b) continue;
-      int16_t xx = (int16_t)(x + (col << 3));
-      for (uint8_t bx = 0; bx < 8; bx++) {
-        if (!(b & (uint8_t)(0x80u >> bx))) continue;
-        int16_t px = (int16_t)(xx + bx);
-        if ((uint16_t)px < 128) page[(uint8_t)px] |= bit;
-      }
-    }
-  }
+  page_rows(pg, (int16_t)(x + s->x0), (int16_t)(y + s->y0), s->w, s->h, s->bits);
+}
+
+static const uint8_t *menu_label(uint8_t menu) {
+  if (menu == 1) return UI_STR_IGRA;
+  if (menu == 2) return UI_STR_SON;
+  if (menu == 3) return UI_STR_LEK;
+  return UI_STR_EDA;
 }
 
 void ui_draw(const Pet *p) {
@@ -100,10 +130,9 @@ void ui_draw(const Pet *p) {
   for (uint8_t pg = 0; pg < 8; pg++) {
     page_clear();
 
-    if (p->screen == SCR_BOOT && pg == 3) {
-      page_fill(34, 2, 60, 4);
+    if (p->screen == SCR_BOOT) {
+      if (pg == 3) page_fill(34, 2, 60, 4);
     } else if (p->screen == SCR_DEAD) {
-      /* Match shared/: y = 8 - anim*2; baby uses soul face + wings at +16 */
       int16_t y = (int16_t)(8 - (int16_t)p->anim * 2);
       if (y > -32) {
         uint8_t baby = (p->stage == ST_BABY);
@@ -115,14 +144,16 @@ void ui_draw(const Pet *p) {
         else sprite_stage(p->stage, 0, &body);
         sprite_wing_l(&wl);
         sprite_wing_r(&wr);
-        page_bm(pg, PET_X - DEATH_WING_SIDE, (int16_t)(ly + wl.y0), &wl);
-        page_bm(pg, PET_X + DEATH_WING_SIDE, (int16_t)(ry + wr.y0), &wr);
-        page_bm(pg, PET_X, (int16_t)(y + body.y0), &body);
-      } else if (pg == 5) {
-        page_num(50, 0);
+        page_bm(pg, PET_X - DEATH_WING_SIDE, ly, &wl);
+        page_bm(pg, PET_X + DEATH_WING_SIDE, ry, &wr);
+        page_bm(pg, PET_X, y, &body);
+      }
+      if (y <= -24) {
+        page_text(pg, ui_center_x(3), 40, UI_STR_UVY);
+        page_text(pg, ui_center_x(3), 52, UI_STR_ZHMI);
       }
     } else if (p->screen == SCR_GAME) {
-      if (pg == 0) page_num(100, p->mg_hits);
+      page_num(pg, 110, 1, p->mg_hits);
       if (p->mg_kind == 2) {
         if (pg == 6) page_fill(0, 2, 128, 2);
         if (pg == 5) {
@@ -141,37 +172,57 @@ void ui_draw(const Pet *p) {
         if (p->ball_y >= 0 && pg == (uint8_t)((uint16_t)p->ball_y >> 3))
           page_fill((uint8_t)p->ball_x, (uint8_t)(p->ball_y & 7), 3, 3);
       }
-    } else if (p->screen == SCR_HOME || p->screen == SCR_SLEEP) {
-      if (pg == 0) {
-        page_num(10, (uint8_t)(100 - p->hunger));
-        page_num(70, p->happiness);
-      }
-      if (pg == 1) {
-        page_num(10, p->energy);
-        page_num(70, p->health);
+    } else if (p->screen == SCR_SLEEP) {
+      SpriteDesc spr;
+      sprite_stage(p->stage, (p->stage == ST_EGG) ? 0 : 1, &spr);
+      page_bm(pg, PET_X, 10, &spr);
+      page_rows(pg, 71, 13, 8, 8, ui_icons[UI_ICON_ZZZ]);
+      page_rows(pg, 82, 6, 8, 8, ui_icons[UI_ICON_ZZZ]);
+      page_text(pg, ui_center_x(3), 42, UI_STR_SON);
+      page_hbar(pg, 8, 56, 112, p->energy);
+    } else if (p->screen == SCR_HOME) {
+      int16_t pet_y = p->feedback ? 6 : 8;
+      SpriteDesc spr;
+      if ((p->flags & FLAG_DIRTY) && p->feedback)
+        sprite_poop_back(p->stage, &spr);
+      else
+        sprite_stage(p->stage, p->anim & 1, &spr);
+      page_bm(pg, PET_X, pet_y, &spr);
+
+      if (p->stage != ST_EGG && p->energy <= SLEEPY_ENERGY) {
+        page_rows(pg, 71, (int16_t)(pet_y + 5), 8, 8, ui_icons[UI_ICON_ZZZ]);
+        if (p->energy <= VERY_SLEEPY_ENERGY)
+          page_rows(pg, 82, pet_y, 8, 8, ui_icons[UI_ICON_ZZZ]);
       }
 
       {
-        int16_t pet_y = (p->feedback && p->screen == SCR_HOME) ? 6 : 8;
-        if (p->screen == SCR_SLEEP) pet_y = 10;
-        uint8_t fr;
-        if (p->screen == SCR_SLEEP)
-          fr = (p->stage == ST_EGG) ? 0 : 1; /* closed eyes while asleep */
-        else
-          fr = p->anim & 1;
-        SpriteDesc spr;
-        if (p->screen == SCR_HOME && (p->flags & FLAG_DIRTY) && p->feedback)
-          sprite_poop_back(p->stage, &spr);
-        else
-          sprite_stage(p->stage, fr, &spr);
-        page_bm(pg, PET_X, (int16_t)(pet_y + spr.y0), &spr);
+        uint8_t vals[4] = {(uint8_t)(100 - p->hunger), p->happiness, p->energy, p->health};
+        for (uint8_t i = 0; i < 4; i++) {
+          uint8_t iy = (uint8_t)(i * 9);
+          page_rows(pg, 0, iy, 8, 8, ui_icons[i]);
+          page_hbar(pg, 10, (uint8_t)(iy + 1), 24, vals[i]);
+        }
       }
 
-      if (pg == 7) {
-        for (uint8_t i = 0; i < 4; i++) {
-          uint8_t x = (uint8_t)(20 + i * 28);
-          page_fill(x, 2, 8, 4);
-          if (i == p->menu) page_fill((uint8_t)(x - 2), 0, 12, 1);
+      if (p->flags & FLAG_SICK) page_text(pg, 110, 0, UI_STR_BOL);
+
+      if (p->flags & FLAG_DIRTY) {
+        page_rows(pg, UI_POOP_X, UI_POOP_Y, UI_POOP_W, UI_POOP_H, ui_poop);
+        if (p->feedback) page_text(pg, ui_center_x(9), 42, UI_STR_NADUDONIL);
+      }
+
+      {
+        const uint8_t *label = menu_label(p->menu);
+        uint8_t n = (p->menu == 1) ? 4 : 3;
+        uint8_t lx = ui_center_x(n);
+        page_text(pg, lx, 52, label);
+        /* invert highlight — same as site invertRegion after text */
+        for (uint8_t yy = 50; yy < 61; yy++) {
+          if ((uint8_t)(yy >> 3) != pg) continue;
+          uint8_t bit = (uint8_t)(1u << (yy & 7));
+          uint8_t x1 = (uint8_t)(lx + n * 6 + 2);
+          for (uint8_t xx = (uint8_t)(lx > 2 ? lx - 2 : 0); xx < x1 && xx < 128; xx++)
+            page[xx] ^= bit;
         }
       }
     }
